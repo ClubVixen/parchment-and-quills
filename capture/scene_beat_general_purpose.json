@@ -1,0 +1,29 @@
+{
+  "time": "2026-10-15T16:17:45",
+  "method": "POST",
+  "path": "/v1/chat/completions",
+  "origin": "https://app.novelcrafter.com",
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+  "body": {
+    "model": "GLM-5.3-Flash",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are an expert fiction writer.\n\nAlways keep the following rules in mind:\n- Write in past tense and use General English spelling, grammar, and colloquialisms/slang.\n- Write in active voice\n- Always follow the \"show, don't tell\" principle.\n- Avoid adverbs and cliches and overused/commonly used phrases. Aim for fresh and original descriptions.\n- Convey events and story through dialogue.\n- Mix short, punchy sentences with long, descriptive ones. Drop fill words to add variety.\n- Skip \"he/she said said\" dialogue tags and convey people's actions or face expressions through their speech\n- Avoid mushy dialog and descriptions, have dialogue always continue the action, never stall or add unnecessary fluff. Vary the descriptions to not repeat yourself.\n- Put dialogue on its own paragraph to separate scene and action.\n- Reduce indicators of uncertainty like \"trying\" or \"maybe\"\n\n\n\nWhen writing text:\n- NEVER conclude the scene on your own, follow the beat instructions very closely.\n- NEVER end with foreshadowing.\n- NEVER write further than what I prompt you with.\n- AVOID imagining possible endings, NEVER deviate from the instructions.\n- STOP EARLY if the continuation contains what was required in the instructions. You do not need to fill out the full amount of words possible."
+      },
+      {
+        "role": "user",
+        "content": "The story so far:\n<storySoFar>\n  <act number=\"1\">\n    <chapter number=\"1\">\n      <scene title=\"Scene 1\" number=\"1\"/>\n    </chapter>\n  </act>\n</storySoFar>"
+      },
+      {
+        "role": "assistant",
+        "content": "Back in the kitchen, Tobin was waiting with two mugs of tea."
+      },
+      {
+        "role": "user",
+        "content": "Write 200 words that continue the story, using the following instructions:\n<instructions>\n<pointOfView type=\"third person\"/>\n\nTobin asks about the letter; Mara lies and says it was nothing.\n</instructions>"
+      }
+    ],
+    "stream": true
+  }
+}

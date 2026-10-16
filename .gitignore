@@ -1,0 +1,14 @@
+# Your stories, settings, covers, audio cache — never commit
+data/
+imports/
+*.zip
+
+# Build output and dependencies
+node_modules/
+dist/
+
+# Local secrets / misc
+.env
+*.log
+.DS_Store
+Thumbs.db
