@@ -178,7 +178,7 @@ function prepare(body) {
   // Chat edit mode: give the AI the current text of the target scenes and the <revision> format.
   const editing = task.kind === 'chat' ? editingInstructions(novel, body.target) : '';
   // Summaries are always third person by design; everything else gets the book's POV spelled out.
-  const pov = task.kind === 'summary' ? '' : povInstruction(novel, task.sceneId || (body.target?.type === 'scene' ? body.target.id : null));
+  const pov = task.kind === 'summary' || task.kind === 'beatsFromText' ? '' : povInstruction(novel, task.sceneId || (body.target?.type === 'scene' ? body.target.id : null));
   const extraSystem = [pov, editing].filter(Boolean).join('\n\n');
   if (extraSystem) {
     const sys = built.messages.find((m) => m.role === 'system');

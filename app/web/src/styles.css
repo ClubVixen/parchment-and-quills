@@ -490,3 +490,15 @@ textarea.input.summary, textarea.input.beat-text { resize: none; }
 .inputs-table .chip { margin-left: 6px; }
 .more-inputs { border-top: 1px dashed var(--line); padding-top: 6px; }
 .more-inputs > summary { cursor: pointer; margin-bottom: 6px; }
+
+/* ---------- beats from text ---------- */
+.ms-chapter-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ms-chapter-head .btn { opacity: .55; }
+.ms-chapter-head:hover .btn { opacity: 1; }
+.bft-rows { display: flex; flex-direction: column; gap: 10px; }
+.bft-row { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.bft-row.running { border-color: var(--line-strong); background: var(--soft); }
+.bft-row.skipped, .bft-row.empty { opacity: .6; }
+.bft-beats { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.bft-beats li { border-left: 4px solid; padding-left: 8px; }
+.bft-beats textarea { width: 100%; }

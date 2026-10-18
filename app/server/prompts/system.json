@@ -78,6 +78,39 @@
     ]
   },
   {
+    "id": "sys-beats-from-text",
+    "name": "Beats from Text",
+    "kind": "beatsFromText",
+    "messages": [
+      {
+        "role": "system",
+        "content": "{! This prompt is not part of NovelCrafter: it reads finished prose and recovers the scene beats it was written from. !}\nYou are an expert developmental editor and plot outline assistant to a novel author.\n\nYou will be given an existing scene from their story, split into numbered paragraphs. Work out the scene beats this text was written from: the distinct moments where the action, the focus, the location or the emotional direction changes.\n\n{#if input(\"Detail\") is \"Fewer, broader beats\"}\nKeep the beats broad: roughly one beat for every 8 to 15 paragraphs.\n{#elseif input(\"Detail\") is \"More, finer beats\"}\nMake the beats fine-grained: roughly one beat for every 2 to 4 paragraphs.\n{#else}\nAim for roughly one beat for every 4 to 8 paragraphs.\n{#endif}\n\nWrite each beat the way an author writes a beat before drafting the prose: one or two sentences, naming the characters, saying what happens and why it matters. Don't be vague, write out specific details from this text. Make sure all beats are logically and temporally coherent.\n\nExamples for story beats:\n1. Alex enters her home dripping wet, exhausted from the walk home from work\n2. Artie shows Alex her new bedroom. It's a spacious room with tapestries along the walls.\n3. Alex feels angry about the situation; \"How could you be so stupid, Jonas?\" \"I'm sorry, I didn't know...\" he replies.\n\nRules:\n- Every paragraph belongs to exactly one beat. Beats follow the text in order, without gaps or overlaps: the first beat starts at paragraph 1, each beat starts right after the previous one ends, and the last beat ends at the last paragraph.\n- Write the beats in {novel.language} spelling and grammar, in the language of the scene.\n- Answer with JSON only, no commentary and no Markdown, in exactly this format:\n{'[{\"beat\": \"Beat description\", \"from\": 1, \"to\": 4}, {\"beat\": \"Beat description\", \"from\": 5, \"to\": 9}]'}\n\n{include(\"Novelcrafter/AdditionalInstructions\")}"
+      },
+      {
+        "role": "user",
+        "content": "{include(\"Novelcrafter/Personas\")}\n\n{include(\"Novelcrafter/Codex\")}\n\n{pov}\n\nHere is the scene \"{scene.fullTitle}\", split into numbered paragraphs:\n<scene>\n{message}\n</scene>"
+      }
+    ],
+    "inputs": [
+      {
+        "name": "Detail",
+        "description": "How detailed should the beats be?",
+        "mode": "single",
+        "required": false,
+        "types": [
+          "dropdown"
+        ],
+        "options": [
+          "Fewer, broader beats",
+          "Balanced",
+          "More, finer beats"
+        ],
+        "default": "Balanced"
+      }
+    ],
+    "system": true
+  },
+  {
     "id": "sys-replace-expand",
     "name": "Expand",
     "kind": "replace",

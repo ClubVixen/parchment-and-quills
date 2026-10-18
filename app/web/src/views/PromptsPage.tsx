@@ -9,6 +9,7 @@ import { CodeEditor, FunctionReference } from '../components/CodeEditor';
 const KINDS: { kind: Prompt['kind']; label: string }[] = [
   { kind: 'beat', label: 'Scene Beat Completions' },
   { kind: 'summary', label: 'Scene Summarizations' },
+  { kind: 'beatsFromText', label: 'Beats from Text' },
   { kind: 'replace', label: 'Text Replacements' },
   { kind: 'chat', label: 'Workshop Chats' },
   { kind: 'component', label: 'Prompt Components' },

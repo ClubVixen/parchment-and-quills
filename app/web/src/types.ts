@@ -76,7 +76,7 @@ export type PromptMessage = { role: 'system' | 'user' | 'assistant'; content: st
 export type Prompt = {
   id: string;
   name: string;
-  kind: 'beat' | 'summary' | 'replace' | 'chat' | 'component';
+  kind: 'beat' | 'summary' | 'beatsFromText' | 'replace' | 'chat' | 'component';
   system: boolean;
   messages: PromptMessage[];
   inputs: PromptInput[];
@@ -146,6 +146,7 @@ export type HistoryEntry = { file: string; savedAt: string; label: string; auto:
 export type Task =
   | { kind: 'beat'; sceneId: string; beatId: string }
   | { kind: 'summary'; sceneId: string }
+  | { kind: 'beatsFromText'; sceneId: string }
   | { kind: 'replace'; sceneId: string; blockId: string; start: number; end: number }
   | { kind: 'chat'; threadId: string; message?: string; retry?: boolean };
 

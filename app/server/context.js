@@ -158,6 +158,10 @@ If the author only asks for feedback, questions or ideas, answer normally withou
 
 // ---------- rendering ----------
 
+/** A scene's paragraphs as "Beats from Text" numbers them (blank lines separate paragraphs). Same rule as the UI. */
+export const sceneParagraphs = (scene) => scene.blocks.filter((b) => b.type === 'text')
+  .flatMap((b) => b.text.split(/\n\s*\n/)).map((p) => p.trim()).filter(Boolean);
+
 function povFor(novel, scene) {
   const p = scene?.pov?.type ? scene.pov : novel.pov || { type: 'third person' };
   return { type: p.type || 'third person', character: p.character || '' };
@@ -166,7 +170,7 @@ function povFor(novel, scene) {
 /**
  * Render `prompt` for a task.
  * task: { kind:'beat', sceneId, beatId } | { kind:'summary', sceneId } | { kind:'replace', sceneId, blockId, start, end }
- *     | { kind:'chat', history:[{role,content}], message }
+ *     | { kind:'chat', history:[{role,content}], message } | { kind:'beatsFromText', sceneId }
  */
 export function buildMessages({ novel: original, settings, prompt, prompts, task, inputs = {}, context = [], model = '' }) {
   const novel = structuredClone(original);
@@ -203,6 +207,10 @@ export function buildMessages({ novel: original, settings, prompt, prompts, task
     const beat = scene.beats.find((b) => b.id === blk.beatId && b.text.trim());
     if (beat) extra.xml.unshift(`<storyBeat>\nThe text being rewritten belongs to this story beat; keep it consistent with it:\n${beat.text.trim()}\n</storyBeat>`);
     scanText = [contents.message, beat?.text || ''].join('\n');
+  } else if (task.kind === 'beatsFromText' && scene) {
+    // The scene's paragraphs, numbered, so the AI can say which paragraphs each beat covers.
+    contents.message = sceneParagraphs(scene).map((p, i) => `[${i + 1}] ${p}`).join('\n\n');
+    scanText = contents.message;
   } else if (task.kind === 'chat') {
     contents.message = task.message || '';
     scanText = [...(task.history || []).map((m) => m.content), contents.message, ...extra.xml].join('\n');

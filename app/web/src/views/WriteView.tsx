@@ -5,6 +5,7 @@ import type { Beat, Prompt, Scene, TextBlock } from '../types';
 import { beatColor, blankScene, chapterNumber, flatScenes, mentions, mergeBlocks, newId, sceneWords, textBlocks } from '../util';
 import { AutoTextarea } from '../components/AutoTextarea';
 import { SceneCodexChips, SceneMenu, useSceneOps, useSummarizer } from '../components/SceneTools';
+import { BeatsFromTextDialog } from '../components/BeatsFromText';
 import { ContextPicker, defaultInputs, GenerateDialog, ModelSelect, promptInputs, Reasoning, useGeneration, type DialogResult, type Inputs } from '../components/Generate';
 
 type Caret = { blockId: string; pos: number } | null;
@@ -12,6 +13,7 @@ type Caret = { blockId: string; pos: number } | null;
 export function WriteView() {
   const { novel, focusedSceneId } = useWorkspace();
   const [chapterFilter, setChapterFilter] = useState('');
+  const [beatsFor, setBeatsFor] = useState<string | null>(null);
   const chapters = novel.acts.flatMap((a, ai) => a.chapters.map((c) => ({ c, ai })));
 
   useEffect(() => {
@@ -25,8 +27,10 @@ export function WriteView() {
           <option value="">Everything – full manuscript</option>
           {chapters.map(({ c }) => <option key={c.id} value={c.id}>Chapter {chapterNumber(novel, c.id)}{c.title ? `: ${c.title}` : ''}</option>)}
         </select>
+        <button className="btn small" onClick={() => setBeatsFor(chapterFilter || chapters[0]?.c.id || '')} title="Let the AI read existing chapters and add their beats">∿ Beats from text…</button>
         <span className="muted small">Tip: highlight a passage to rewrite it or assign it to a beat.</span>
       </div>
+      {beatsFor !== null && <BeatsFromTextDialog chapterId={beatsFor} onClose={() => setBeatsFor(null)} />}
       <div className="manuscript">
         {novel.acts.map((act, ai) => {
           const visible = act.chapters.filter((c) => !chapterFilter || c.id === chapterFilter);
@@ -36,7 +40,10 @@ export function WriteView() {
               <div className="ms-act">Act {ai + 1}{act.title ? `: ${act.title}` : ''}</div>
               {visible.map((ch) => (
                 <div key={ch.id} className="ms-chapter">
-                  <h1 className="ms-chapter-title">{ch.title || `Chapter ${chapterNumber(novel, ch.id)}`}</h1>
+                  <div className="ms-chapter-head">
+                    <h1 className="ms-chapter-title">{ch.title || `Chapter ${chapterNumber(novel, ch.id)}`}</h1>
+                    <button className="btn ghost small" onClick={() => setBeatsFor(ch.id)} title="Let the AI read this chapter and add its beats">∿ Beats from text</button>
+                  </div>
                   {ch.scenes.map((s, si) => (
                     <div key={s.id}>
                       {si > 0 && <div className="scene-divider">⟡</div>}
