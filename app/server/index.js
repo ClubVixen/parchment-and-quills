@@ -7,13 +7,20 @@ import { buildMessages, editingInstructions, povInstruction } from './context.js
 import { listModels, streamChat } from './ai.js';
 import { listVoices, synthesize } from './tts.js';
 import { aiSpeakers, getScript, saveScript } from './audio.js';
+import { effectiveInputs, normalizeInput } from './inputs.js';
+import { functionDocs } from './functions.js';
 
 const PORT = Number(process.env.NC_PORT || 8787);
 const HOST = process.env.NC_HOST || '127.0.0.1';
 const WEB_DIST = path.join(import.meta.dirname, '..', 'web', 'dist');
 const SYSTEM_PROMPTS = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'prompts', 'system.json'), 'utf8'));
 
-const allPrompts = () => [...SYSTEM_PROMPTS, ...store.getCustomPrompts().map((p) => ({ ...p, system: false }))];
+const rawPrompts = () => [...SYSTEM_PROMPTS, ...store.getCustomPrompts().map((p) => ({ ...p, system: false }))];
+/** Every prompt with its inputs in the current shape, plus the inputs it inherits from included components. */
+const allPrompts = () => {
+  const list = rawPrompts().map((p) => ({ ...p, inputs: (p.inputs || []).map(normalizeInput) }));
+  return list.map((p) => ({ ...p, allInputs: effectiveInputs(p, list) }));
+};
 function findPrompt(id) {
   const p = allPrompts().find((x) => x.id === id);
   if (!p) throw Object.assign(new Error(`Unknown prompt ${id}`), { status: 400 });
@@ -46,9 +53,10 @@ route('GET', '/api/settings', () => store.getSettings());
 route('PUT', '/api/settings', ({ body }) => store.saveSettings(body));
 route('GET', '/api/models', async () => listModels(store.getSettings()));
 route('GET', '/api/prompts', () => allPrompts());
+route('GET', '/api/template-functions', () => functionDocs());
 route('PUT', '/api/prompts/custom', ({ body }) => {
   if (!Array.isArray(body)) throw Object.assign(new Error('Expected a list'), { status: 400 });
-  store.saveCustomPrompts(body.map(({ system, ...p }) => p));
+  store.saveCustomPrompts(body.map(({ system, allInputs, ...p }) => p));
   return allPrompts();
 });
 
@@ -166,7 +174,7 @@ function prepare(body) {
     }
     task = { ...task, message, history: msgs.map((m) => ({ role: m.role, content: m.content })) };
   }
-  const built = buildMessages({ novel, settings, prompt, prompts: allPrompts(), task, inputs: body.inputs || {}, context: body.context || [] });
+  const built = buildMessages({ novel, settings, prompt, prompts: allPrompts(), task, inputs: body.inputs || {}, context: body.context || [], model: body.model || settings.model });
   // Chat edit mode: give the AI the current text of the target scenes and the <revision> format.
   const editing = task.kind === 'chat' ? editingInstructions(novel, body.target) : '';
   // Summaries are always third person by design; everything else gets the book's POV spelled out.

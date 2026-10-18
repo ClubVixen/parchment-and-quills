@@ -54,15 +54,24 @@ export type Novel = {
 
 export type NovelSummary = { id: string; title: string; author: string; updatedAt: string; createdAt: string; words: number; codex: number; cover: number | null };
 
+/** NovelCrafter-style input: the ways it can be answered (`types`), one or several answers, and a default. */
+export type InputType = 'text' | 'dropdown' | 'scene' | 'context' | 'checkbox';
 export type PromptInput = {
   name: string;
   key?: string;
-  type: 'text' | 'number' | 'choice' | 'multi' | 'context' | 'scene';
+  displayName?: string;
+  description?: string;
+  types: InputType[];
+  mode: 'single' | 'multiple';
   required?: boolean;
   options?: string[];
-  default?: string;
-  description?: string;
+  default?: string | string[];
+  placeholder?: string;
+  hideInput?: boolean;
+  addToContext?: boolean;
+  sceneMode?: 'summary' | 'content';
 };
+export type FunctionDoc = { name: string; section: string; description: string };
 export type PromptMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 export type Prompt = {
   id: string;
@@ -71,6 +80,8 @@ export type Prompt = {
   system: boolean;
   messages: PromptMessage[];
   inputs: PromptInput[];
+  /** Own inputs plus those of included components (computed by the server). */
+  allInputs?: PromptInput[];
 };
 
 export type ContextItem =
@@ -78,6 +89,7 @@ export type ContextItem =
   | { type: 'scene'; id: string }
   | { type: 'sceneSummary'; id: string }
   | { type: 'chapter'; id: string }
+  | { type: 'act'; id: string }
   | { type: 'outline' }
   | { type: 'manuscript' }
   | { type: 'text'; text: string };

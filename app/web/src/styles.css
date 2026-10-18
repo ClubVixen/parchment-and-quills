@@ -452,3 +452,41 @@ textarea.input.summary, textarea.input.beat-text { resize: none; }
 /* Rewrite results float at the bottom of the screen, so they're visible wherever the selection was. */
 .gen-result.docked { position: fixed; bottom: 16px; left: calc(50% + var(--sidebar) / 2); transform: translateX(-50%); width: min(760px, 90vw); max-height: 52vh; overflow: auto; z-index: 25; background: #fffef9; box-shadow: 0 12px 40px #0003; border-style: solid; }
 .sidebar-closed .gen-result.docked { left: 50%; }
+
+/* ---------- prompt template editor (highlighting like NovelCrafter's) ---------- */
+.code-view { margin: 0; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
+.code-editor { display: grid; }
+.code-editor > * { grid-area: 1 / 1; }
+.code-editor .code-view { pointer-events: none; }
+.code-editor .code-input {
+  width: 100%; margin: 0; resize: none; overflow: hidden; background: transparent; color: transparent; caret-color: var(--ink);
+  border: 1px solid transparent; border-radius: 6px; padding: 10px; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; line-height: 1.55;
+  white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; outline: none;
+}
+.code-editor .code-input:focus { border-color: var(--line-strong); }
+.code-editor .code-input::selection { background: #2563a855; color: transparent; }
+.hl-comment { color: #8a8f98; font-style: italic; }
+.hl-block { color: #1f5fa0; background: #2563a80d; border-radius: 3px; }
+.hl-block-ctl { color: #8a3fb0; background: #8a3fb00f; }
+.hl-ctl { color: #8a3fb0; font-weight: 600; }
+.hl-fn { color: #0d6e6e; font-weight: 600; }
+.hl-var { color: #1f5fa0; }
+.hl-kw { color: #b5452c; font-weight: 600; }
+.hl-str { color: #4d7c0f; }
+.hl-num { color: #b45309; }
+.hl-tag { color: #9a6b2f; }
+.template-help { margin: 4px 0 8px; }
+.template-help > summary { cursor: pointer; }
+.fn-ref { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.fn-list { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.fn-section { position: sticky; top: 0; background: var(--soft); border-bottom: 1px solid var(--line); padding: 4px 8px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
+.fn-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: transparent; padding: 5px 8px; cursor: pointer; font: inherit; }
+.fn-item:hover { background: var(--hi); }
+.fn-item code { background: transparent; padding: 0; }
+.inputs-table { margin-top: 6px; }
+.inputs-table table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+.inputs-table th, .inputs-table td { text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); padding: 6px 8px; }
+.inputs-table th { font-size: 12px; color: var(--muted); font-weight: 600; }
+.inputs-table .chip { margin-left: 6px; }
+.more-inputs { border-top: 1px dashed var(--line); padding-top: 6px; }
+.more-inputs > summary { cursor: pointer; margin-bottom: 6px; }

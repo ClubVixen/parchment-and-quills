@@ -5,7 +5,7 @@ import type { Beat, Prompt, Scene, TextBlock } from '../types';
 import { beatColor, blankScene, chapterNumber, flatScenes, mentions, mergeBlocks, newId, sceneWords, textBlocks } from '../util';
 import { AutoTextarea } from '../components/AutoTextarea';
 import { SceneCodexChips, SceneMenu, useSceneOps, useSummarizer } from '../components/SceneTools';
-import { ContextPicker, defaultInputs, GenerateDialog, ModelSelect, Reasoning, useGeneration, type DialogResult, type Inputs } from '../components/Generate';
+import { ContextPicker, defaultInputs, GenerateDialog, ModelSelect, promptInputs, Reasoning, useGeneration, type DialogResult, type Inputs } from '../components/Generate';
 
 type Caret = { blockId: string; pos: number } | null;
 
@@ -184,14 +184,19 @@ const AUTO_GUIDE: Record<string, string> = {
   Rephrase: 'Rephrase it so it reads smoothly and naturally, keeping the meaning, tone and voice.',
 };
 
-/** Prompt inputs for a quick rewrite: the optional guide text goes into the prompt's Instructions input. */
+/**
+ * Prompt inputs for a quick rewrite: the optional guide text goes into the prompt's Instructions input, and any
+ * other required choice without a default (e.g. Shorten's Length) takes its first option.
+ */
 function guidedInputs(p: Prompt, guide: string): Inputs {
   const inputs = defaultInputs(p);
-  const instr = p.inputs.find((i) => i.name === 'Instructions');
+  const defs = promptInputs(p);
+  const instr = defs.find((i) => i.name === 'Instructions');
   if (instr) {
     const g = guide.trim() || (instr.required ? AUTO_GUIDE[p.name] || 'Improve the passage while keeping its meaning and voice.' : '');
-    if (g) inputs.Instructions = instr.type === 'multi' ? [g] : g;
+    if (g) inputs.Instructions = instr.mode === 'multiple' ? [g] : g;
   }
+  for (const d of defs) if (d.required && d !== instr && !inputs[d.name] && d.options?.length) inputs[d.name] = d.options[0];
   return inputs;
 }
 

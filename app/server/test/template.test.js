@@ -18,7 +18,9 @@ test('if / elseif / else / comments', () => {
 test('in, not, concatenation, function-valued paths', () => {
   assert.equal(r('{#if "b" in list}yes{#endif}', { list: ['a', 'b'] }), 'yes');
   assert.equal(r('{#if not empty}none{#endif}', { empty: '' }), 'none');
-  assert.equal(r('{ifs(name, " from " + name)}', {}, { ifs: (c, a) => (c ? a : '') }), '');
+  assert.equal(r('{ifs(name, " from " + name)}', { name: '' }, { ifs: (c, a) => (c ? a : '') }), '');
+  // Like NovelCrafter, a name that is neither a function nor a variable is an error, not silently empty.
+  assert.throws(() => r('{nosuchthing}'), /Unknown function or variable: nosuchthing/);
   const pov = { character: (s) => (s ? s.who : 'Mara') };
   assert.equal(r('{pov.character} / {pov.character(prev)}', { pov, prev: { who: 'Tobin' } }), 'Mara / Tobin');
 });
@@ -88,4 +90,91 @@ test('rewrite under a story beat sends the beat; POV rule follows the novel sett
   n.acts[0].chapters[0].scenes[0].pov = { type: 'third person objective', character: '' };
   assert.match(povInstruction(n, 's'), /third person objective/);
   assert.equal(povInstruction({ ...n, povReminder: false }, 's'), '');
+});
+
+// ---------- NovelCrafter function library ----------
+
+const book = {
+  id: 'b', title: 'Book', author: 'A. Writer', language: 'British English', tense: 'past tense', pov: { type: 'third person limited', character: 'Mara' },
+  codex: [
+    { id: 'm', type: 'character', name: 'Mara', aliases: [], tags: ['keeper'], description: 'Keeper. Friends with Tobin.', alwaysInclude: true },
+    { id: 't', type: 'character', name: 'Tobin', aliases: [], tags: [], description: 'Old keeper.' },
+    { id: 'l', type: 'location', name: 'Saltreach', aliases: [], tags: [], description: 'A lighthouse.' },
+  ],
+  acts: [{ id: 'a1', title: 'One', chapters: [
+    { id: 'c1', title: 'Arrival', scenes: [
+      { id: 's1', title: 'Dawn', summary: 'Mara finds a letter.', labels: ['mystery'], codexIds: ['l'], blocks: [{ id: 'x1', type: 'text', text: 'The wind came off the sea.' }] },
+      { id: 's2', title: 'Tea', summary: 'Tobin asks about it.', pov: { type: 'first person', character: 'Tobin' }, blocks: [{ id: 'x2', type: 'text', text: 'I poured the tea.' }] },
+    ] },
+    { id: 'c2', title: 'Night', scenes: [
+      { id: 's3', title: 'Lamp', summary: 'Mara reads the letter.', blocks: [{ id: 'x3', type: 'text', text: 'She climbed the stairs.' }] },
+    ] },
+  ] }],
+};
+const custom = (content, inputs = []) => ({ id: 'c', name: 'Custom', kind: 'chat', inputs, messages: [{ role: 'system', content }] });
+const say = (content, { sceneId = 's2', inputs = {}, defs = [], kind = 'summary' } = {}) =>
+  buildMessages({ novel: book, settings: { persona: '' }, prompts, prompt: custom(content, defs), inputs, task: { kind, sceneId, message: 'hi', history: [] } }).messages[0]?.content || '';
+
+test('scene, chapter, act and story functions', () => {
+  assert.equal(say('{scene.title} | {scene.fullTitle} | {scene.number}'), 'Tea | Chapter 1 - Tea | 2');
+  assert.equal(say('{scene.title(scene.previous)} < {scene.title(scene.next)}'), 'Dawn < Lamp');
+  assert.equal(say('{chapter.title} / {chapter.title(chapter.next)} / {act.title} / {chapter.number}'), 'Chapter 1: Arrival / Chapter 2: Night / One / 1');
+  assert.match(say('{storyToCome}'), /<storyToCome>[\s\S]*Mara reads the letter\.[\s\S]*<\/storyToCome>/);
+  assert.match(say('{storySoFar}'), /<storySoFar>[\s\S]*Mara finds a letter\.[\s\S]*<\/storySoFar>/);
+  assert.equal(say('{asNumberedList(title(scene(novel.outline)))}'), '1. Dawn\n2. Tea\n3. Lamp');
+  assert.equal(say('{scene.title(takeLast(scene(storySoFar), 1))}', { sceneId: 's3' }), 'Tea');
+  assert.match(say('{chapter.summary}'), /<chapter number="1" title="Arrival">\n<scene title="Chapter 1 - Dawn" number="1">Mara finds a letter\.<\/scene>/);
+  assert.equal(say('{#if scene.hasLabel(scene.previous, "Mystery")}labelled{#endif}'), 'labelled');
+});
+
+test('pov functions follow scene overrides', () => {
+  assert.equal(say('{pov.type}/{pov.character}/{#if pov.isFirstPerson}1st{#endif}{#if pov.isOverwrite} override{#endif}'), 'first person/Tobin/1st override');
+  assert.equal(say('{pov.character(scene.previousSamePOV)}'), '');
+  assert.equal(say('{pov.type(scene.previous)}'), 'third person limited');
+});
+
+test('codex functions', () => {
+  assert.equal(say('{asList(codex.name(codex.characters(codex.all)))}'), '- Mara\n- Tobin');
+  assert.equal(say('{codex.name(codex.hasTag(codex.all, "Keeper"))}'), 'Mara');
+  assert.equal(say('{codex.name(codex.relations("Mara"))}'), 'Tobin');
+  assert.equal(say('{codex.name(scene.references(scene.previous))}'), 'Saltreach');
+  assert.match(say('{codex.get("tobin")}'), /^<character name="Tobin">Old keeper\.<\/character>$/);
+});
+
+test('text, list, math and logic functions', () => {
+  assert.equal(say('{uppercase("abc")} {lowercase("DEF")} {join("a", "b")} {count(any("x", "y", "z"))}'), 'ABC def ab 3');
+  assert.equal(say('{pluralize(1, "beat", "beats")}, {pluralize(3, "beat", "beats")}'), '1 beat, 3 beats');
+  assert.equal(say('{max(3, 9, 4)} {min(3, 9, 4)} {floor(2.7)} {ceil(2.1)}'), '9 3 2 3');
+  assert.equal(say('{#if isGreaterThan(wordCount("one two three"), 2)}long{#endif}'), 'long');
+  assert.equal(say('{#if contains("Romance: Billionaire", "romance")}yes{#endif}{#if startsWith("Cozy: Fantasy", "cozy")} cozy{#endif}'), 'yes cozy');
+  assert.equal(say('{novel.title} by {novel.author}, {novel.language}'), 'Book by A. Writer, British English');
+});
+
+test('inputs: defaults, dropdown+text, scene picks and component inputs', () => {
+  const defs = [
+    { name: 'Words', types: ['dropdown', 'text'], options: ['200', '400'], default: '400' },
+    { name: 'Scene', types: ['scene'], sceneMode: 'summary' },
+  ];
+  assert.equal(say('{input("Words")}', { defs }), '400');
+  assert.equal(say('{input("words")}', { defs, inputs: { Words: '250' } }), '250');
+  assert.equal(say('{input("Scene")}', { defs, inputs: { Scene: 'scene:s3' } }), '<scene title="Chapter 2 - Lamp" number="1">Mara reads the letter.</scene>');
+  // Instructions come from the AdditionalInstructions component, like in NovelCrafter.
+  assert.match(say('{include("Novelcrafter/AdditionalInstructions")}', { inputs: { Instructions: 'Be terse.' } }), /<instructions>\nBe terse\.\n<\/instructions>/);
+  const beats = prompts.find((p) => p.name === 'Scene Beats from Summary');
+  const r = buildMessages({ novel: book, settings: {}, prompts, prompt: beats, inputs: { Scene: 'scene:s1' }, task: { kind: 'chat', message: 'go', history: [] } });
+  assert.match(r.messages[0].content, /develop a list of 12 highly detailed scene beats/);
+  assert.match(r.messages[0].content, /Here is the scene that you need to develop the beats for:\n<scene title="Chapter 1 - Dawn" number="1">Mara finds a letter\.<\/scene>/);
+});
+
+test('developmental editor uses the picked genre and feedback', () => {
+  const dev = prompts.find((p) => p.name === 'Developmental Editor');
+  const run = (inputs) => buildMessages({ novel: book, settings: {}, prompts, prompt: dev, inputs, task: { kind: 'chat', message: 'Thoughts?', history: [] } }).messages[0].content;
+  const bare = run({});
+  assert.match(bare, /in the "novel" genre/);
+  assert.match(bare, /<generalAdvice>\n<\/generalAdvice>/);
+  const set = run({ Genre: 'Fantasy: Dark', Feedback: 'Dialogue' });
+  assert.match(set, /in the "Fantasy: Dark" genre/);
+  assert.match(set, /advice on: "Dialogue"/);
+  assert.match(set, /Craft speech patterns/);
+  assert.match(set, /<fantasy>[\s\S]*fantasy jargon[\s\S]*<\/fantasy>/);
 });

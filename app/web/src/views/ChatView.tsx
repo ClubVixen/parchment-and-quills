@@ -3,7 +3,7 @@ import { api } from '../api';
 import { Avatar, useApp } from '../App';
 import { useWorkspace } from './Workspace';
 import type { ChatMessage, EditTarget, Thread } from '../types';
-import { InputsForm, ModelSelect, PromptPreview, Reasoning, useGeneration, defaultInputs } from '../components/Generate';
+import { InputsForm, ModelSelect, PromptPreview, Reasoning, useGeneration, defaultInputs, missingInputs } from '../components/Generate';
 import { AssistantContent } from '../components/Revisions';
 import { chapterNumber, flatScenes, sceneLabel } from '../util';
 import { AutoTextarea } from '../components/AutoTextarea';
@@ -57,7 +57,7 @@ function ThreadView({ thread }: { thread: Thread }) {
     patchTimer.current = window.setTimeout(() => { api.updateThread(novel.id, thread.id, p).then(() => reloadThreads()); }, 400);
   };
 
-  const missing = prompt?.inputs.filter((i) => i.required && i.type !== 'context' && !String(local.inputs[i.name] || '').trim()) || [];
+  const missing = missingInputs(prompt, local.inputs);
   const request = (task: { message?: string; retry?: boolean }) => ({
     novelId: novel.id, promptId: prompt.id, model: model || undefined, inputs: local.inputs, context: local.context, target: local.target || null,
     task: { kind: 'chat' as const, threadId: thread.id, ...task },

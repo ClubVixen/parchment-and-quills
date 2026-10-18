@@ -195,16 +195,22 @@ function lookup(ctx, path) {
   return typeof v === 'function' ? v.bind(parent) : v;
 }
 
+// NovelCrafter names are flat: `scene.previous` is one function, not a property of `scene`.
+const fnFor = (ctx, path) => {
+  const name = path.join('.');
+  return Object.hasOwn(ctx.fns, name) ? ctx.fns[name] : undefined;
+};
+
 function evaluate(ast, ctx) {
   if ('lit' in ast) return ast.lit;
   if (ast.path) {
-    const v = ast.path.length === 1 && ast.path[0] in ctx.fns && !(ast.path[0] in ctx.vars)
-      ? ctx.fns[ast.path[0]] : lookup(ctx, ast.path);
+    const v = fnFor(ctx, ast.path) ?? lookup(ctx, ast.path);
+    if (v === undefined && !(ast.path[0] in (ctx.vars || {}))) throw new Error(`Unknown function or variable: ${ast.path.join('.')}`);
     return typeof v === 'function' ? v() : v;
   }
   if (ast.call) {
-    const fn = ast.call.length === 1 && ast.call[0] in ctx.fns ? ctx.fns[ast.call[0]] : lookup(ctx, ast.call);
-    if (typeof fn !== 'function') throw new Error(`Not a function: ${ast.call.join('.')}`);
+    const fn = fnFor(ctx, ast.call) ?? lookup(ctx, ast.call);
+    if (typeof fn !== 'function') throw new Error(`Unknown function: ${ast.call.join('.')}`);
     return fn(...ast.args.map((a) => evaluate(a, ctx)));
   }
   const a = evaluate(ast.a, ctx);
@@ -222,8 +228,10 @@ function evaluate(ast, ctx) {
   throw new Error('Bad expression');
 }
 
+// Lists compare like NovelCrafter's "any" lists (an `all(...)` list must match in every element).
 function eq(a, b) {
-  if (Array.isArray(a)) return a.length === 1 && eq(a[0], b);
+  if (Array.isArray(a)) return a.length > 0 && (a.matchAll ? a.every((x) => eq(x, b)) : a.some((x) => eq(x, b)));
+  if (Array.isArray(b)) return b.length > 0 && b.some((x) => eq(a, x));
   return toStr(a).trim().toLowerCase() === toStr(b).trim().toLowerCase();
 }
 

@@ -4,6 +4,7 @@ import { navigate, TopNav, useApp } from '../App';
 import type { Prompt, PromptMessage } from '../types';
 import { newId } from '../util';
 import { AutoTextarea } from '../components/AutoTextarea';
+import { CodeEditor, FunctionReference } from '../components/CodeEditor';
 
 const KINDS: { kind: Prompt['kind']; label: string }[] = [
   { kind: 'beat', label: 'Scene Beat Completions' },
@@ -89,7 +90,15 @@ function PromptEditor({ prompt, onClone, onSave, onDelete }: { prompt: Prompt; o
         </div>
       )}
       {ro && <h2>{p.name}</h2>}
-      <p className="muted small">Template syntax: <code>{'{novel.title}'}</code>, <code>{'{input("Words")}'}</code>, <code>{'{include("Novelcrafter/Codex")}'}</code>, <code>{'{#if …}{#elseif …}{#else}{#endif}'}</code>, comments <code>{'{! … !}'}</code>.</p>
+      <details className="template-help">
+        <summary className="muted small">Template syntax and function reference</summary>
+        <p className="muted small">
+          Insert values with <code>{'{novel.title}'}</code> or <code>{'{input("Words")}'}</code>, call functions like <code>{'{lastWords(scene.fullText(scene.previous), 650)}'}</code>,
+          reuse components with <code>{'{include("Novelcrafter/Codex")}'}</code>, branch with <code>{'{#if …}{#elseif …}{#else}{#endif}'}</code> (operators <code>is</code>, <code>is not</code>, <code>in</code>, <code>not</code>, <code>+</code>) and comment with <code>{'{! … !}'}</code>.
+          An included component also brings its inputs (e.g. Instructions, Additional Context).
+        </p>
+        <FunctionReference />
+      </details>
       {p.messages.map((m, i) => (
         <div key={i} className="prompt-msg">
           <div className="row">
@@ -102,25 +111,57 @@ function PromptEditor({ prompt, onClone, onSave, onDelete }: { prompt: Prompt; o
             <button className="btn ghost tiny" onClick={() => navigator.clipboard.writeText(m.content)}>Copy</button>
             {!ro && p.kind !== 'component' && <button className="btn ghost tiny" onClick={() => setP({ ...p, messages: p.messages.filter((_, j) => j !== i) })}>Remove</button>}
           </div>
-          <AutoTextarea className="input code" readOnly={ro} value={m.content} onChange={(v) => setMsg(i, { content: v })} />
+          <CodeEditor readOnly={ro} value={m.content} onChange={(v) => setMsg(i, { content: v })} />
         </div>
       ))}
+      <InputsTable prompt={prompt} />
+      {p.kind === 'component' && !!prompt.inputs.length && <p className="muted small">Prompts that include this component also show these inputs.</p>}
       {!ro && p.kind !== 'component' && <button className="btn small" onClick={() => setP({ ...p, messages: [...p.messages, { role: 'user', content: '' }] })}>+ Add message</button>}
-      {p.kind !== 'component' && (
-        <details open={!ro}>
-          <summary><b>Inputs</b> <span className="muted small">(what the Tweak dialog asks for)</span></summary>
-          {ro ? <pre className="code">{inputsJson}</pre> : (
-            <>
-              <AutoTextarea className="input code" value={inputsJson} onChange={(v) => {
-                setInputsJson(v);
-                try { setP({ ...p, inputs: JSON.parse(v) }); setJsonErr(''); } catch (e) { setJsonErr((e as Error).message); }
-              }} />
-              {jsonErr && <div className="alert small">{jsonErr}</div>}
-              <p className="muted tiny">Each input: {'{ "name", "type": text|number|choice|multi|context|scene, "options": [...], "default", "required" }'}</p>
-            </>
-          )}
+      {!ro && (
+        <details>
+          <summary><b>Edit inputs</b> <span className="muted small">(JSON)</span></summary>
+          <AutoTextarea className="input code" value={inputsJson} onChange={(v) => {
+            setInputsJson(v);
+            try { setP({ ...p, inputs: JSON.parse(v) }); setJsonErr(''); } catch (e) { setJsonErr((e as Error).message); }
+          }} />
+          {jsonErr && <div className="alert small">{jsonErr}</div>}
+          <p className="muted tiny">
+            Each input: {'{ "name", "description", "types": ["text", "dropdown", "scene", "context", "checkbox"], "mode": "single" | "multiple", "options": [...], "default", "required", "placeholder", "hideInput" }'}.
+            Options named "Group: Label" are grouped in the dropdown.
+          </p>
         </details>
       )}
+    </div>
+  );
+}
+
+const TYPE_LABEL: Record<string, string> = { text: 'your own text', dropdown: 'a choice', scene: 'a scene', context: 'picked context', checkbox: 'yes/no' };
+
+/** Read-only overview of what the prompt asks for, including inputs inherited from included components. */
+function InputsTable({ prompt }: { prompt: Prompt }) {
+  const all = prompt.allInputs || prompt.inputs;
+  if (!all.length) return null;
+  const own = new Set(prompt.inputs.map((i) => i.name));
+  return (
+    <div className="inputs-table">
+      <b>Inputs</b> <span className="muted small">(what the Tweak dialog and chat ask for)</span>
+      <table>
+        <thead><tr><th>Input</th><th>Answer with</th><th>Options</th><th>Default</th></tr></thead>
+        <tbody>
+          {all.map((i) => (
+            <tr key={i.name}>
+              <td>
+                <b>{i.displayName || i.name}</b>{i.required && <span className="chip tiny">Required</span>}{i.hideInput && <span className="chip tiny">More options</span>}
+                {!own.has(i.name) && <div className="muted tiny">from an included component</div>}
+                <div className="muted small">{i.description}</div>
+              </td>
+              <td className="small">{i.types.map((t) => TYPE_LABEL[t] || t).join(' or ')}{i.mode === 'multiple' ? ' (several)' : ''}</td>
+              <td className="small">{i.options?.length ? i.options.join(', ') : '—'}</td>
+              <td className="small">{Array.isArray(i.default) ? i.default.join(', ') : i.default || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

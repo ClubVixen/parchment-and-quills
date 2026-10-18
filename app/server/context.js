@@ -1,14 +1,11 @@
-// Builds the template variables for a task and renders a prompt into chat messages.
+// Builds the template environment for a task and renders a prompt into chat messages.
 // Output formats (codex XML, storySoFar, scene wrappers, POV tag) match captured NovelCrafter requests.
-import { renderTemplate, tidy, toStr, truthy } from './template.js';
-import { wordCount } from './store.js';
+import { renderTemplate, tidy } from './template.js';
+import { codexXml, createFunctions, esc, lastWords, mentionedIds, OutlineItem, sceneText } from './functions.js';
+import { effectiveInputs, findComponent } from './inputs.js';
 
-const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+export { codexXml, mentionedIds, sceneText };
 const words = (text) => (text || '').split(/\s+/).filter(Boolean);
-const lastWords = (text, n) => words(stripXml(text)).slice(-n).join(' ');
-const firstWords = (text, n) => words(text).slice(0, n).join(' ');
-const stripXml = (s) => toStr(s).replace(/<[^>]+>/g, '');
-const indent = (s, pad) => s.split('\n').map((l) => (l ? pad + l : l)).join('\n');
 
 // ---------- manuscript helpers ----------
 
@@ -26,8 +23,6 @@ function chapterNumber(novel, act, ci) {
   return ci + 1;
 }
 
-export const sceneText = (scene) => scene.blocks.filter((b) => b.type === 'text').map((b) => b.text.trim()).filter(Boolean).join('\n\n');
-
 function sceneXml(info) {
   const title = `Chapter ${info.chapterNo} - ${info.scene.title || `Scene ${info.sceneNo}`}`;
   return `<scene title="${esc(title)}" number="${info.sceneNo}">${sceneText(info.scene)}</scene>`;
@@ -37,46 +32,10 @@ function sceneXml(info) {
 export function storySoFar(novel, sceneId) {
   const flat = flatScenes(novel);
   const stop = sceneId ? flat.findIndex((f) => f.scene.id === sceneId) : flat.length;
-  const before = flat.slice(0, stop < 0 ? flat.length : stop).filter((f) => f.scene.includeInAI !== false);
-  if (!before.length) return '';
-  const lines = ['<storySoFar>'];
-  let act = null, chapter = null;
-  for (const f of before) {
-    if (f.chapter !== chapter && chapter) lines.push('    </chapter>');
-    if (f.act !== act) {
-      if (act) lines.push('  </act>');
-      lines.push(`  <act number="${f.actNo}"${f.act.title ? ` title="${esc(f.act.title)}"` : ''}>`);
-      act = f.act;
-    }
-    if (f.chapter !== chapter) {
-      lines.push(`    <chapter number="${f.chapterNo}"${f.chapter.title ? ` title="${esc(f.chapter.title)}"` : ''}>`);
-      chapter = f.chapter;
-    }
-    const attrs = `title="${esc(f.scene.title || `Scene ${f.sceneNo}`)}" number="${f.sceneNo}"`;
-    const summary = f.scene.summary?.trim();
-    lines.push(summary ? `      <scene ${attrs}>${summary}</scene>` : `      <scene ${attrs}/>`);
-  }
-  lines.push('    </chapter>', '  </act>', '</storySoFar>');
-  return lines.join('\n');
+  return String(new OutlineItem(flat.slice(0, stop < 0 ? flat.length : stop)));
 }
 
 // ---------- codex ----------
-
-const reCache = new Map();
-function entryRegex(entry) {
-  const names = [entry.name, ...(entry.aliases || [])].map((s) => s.trim()).filter((s) => s.length > 1);
-  const key = names.join('|');
-  if (!reCache.has(key)) {
-    const alt = names.sort((a, b) => b.length - a.length).map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-    reCache.set(key, alt ? new RegExp(`(?<![\\p{L}\\p{N}])(?:${alt})(?![\\p{L}\\p{N}])`, 'iu') : null);
-  }
-  return reCache.get(key);
-}
-
-export function mentionedIds(codex, text) {
-  if (!text) return [];
-  return codex.filter((e) => entryRegex(e)?.test(text)).map((e) => e.id);
-}
 
 /** Entries relevant for `text`: always-included + mentioned + explicit ids, then one level of nested mentions. */
 export function relevantCodex(novel, text, extraIds = []) {
@@ -84,16 +43,6 @@ export function relevantCodex(novel, text, extraIds = []) {
   const nested = novel.codex.filter((e) => ids.has(e.id)).map((e) => e.description).join('\n');
   for (const id of mentionedIds(novel.codex, nested)) ids.add(id);
   return novel.codex.filter((e) => ids.has(e.id) && e.includeInAI !== false);
-}
-
-export function codexXml(entries) {
-  return entries.map((e) => {
-    const tag = (e.type || 'other').toLowerCase().replace(/[^a-z]/g, '') || 'other';
-    const aliases = (e.aliases || []).filter(Boolean);
-    const attrs = `name="${esc(e.name)}"${aliases.length ? ` aliases="${esc(aliases.join(', '))}"` : ''}`;
-    const body = (e.description || '').trim();
-    return body.includes('\n') ? `<${tag} ${attrs}>\n${indent(body, '  ')}\n</${tag}>` : `<${tag} ${attrs}>${body}</${tag}>`;
-  }).join('\n');
 }
 
 // ---------- additional context ----------
@@ -111,6 +60,9 @@ export function resolveContext(novel, items = []) {
     else if (item.type === 'chapter') {
       const fs = flat.filter((x) => x.chapter.id === item.id);
       if (fs.length) xml.push(`<chapter number="${fs[0].chapterNo}"${fs[0].chapter.title ? ` title="${esc(fs[0].chapter.title)}"` : ''}>\n${fs.map(sceneXml).join('\n')}\n</chapter>`);
+    } else if (item.type === 'act') {
+      const fs = flat.filter((x) => x.act.id === item.id);
+      if (fs.length) xml.push(`<act number="${fs[0].actNo}"${fs[0].act.title ? ` title="${esc(fs[0].act.title)}"` : ''}>\n${fs.map(sceneXml).join('\n')}\n</act>`);
     } else if (item.type === 'text' && item.text?.trim()) xml.push(item.text.trim());
   }
   return { xml, codexIds };
@@ -216,121 +168,65 @@ function povFor(novel, scene) {
  * task: { kind:'beat', sceneId, beatId } | { kind:'summary', sceneId } | { kind:'replace', sceneId, blockId, start, end }
  *     | { kind:'chat', history:[{role,content}], message }
  */
-export function buildMessages({ novel: original, settings, prompt, prompts, task, inputs = {}, context = [] }) {
+export function buildMessages({ novel: original, settings, prompt, prompts, task, inputs = {}, context = [], model = '' }) {
   const novel = structuredClone(original);
   for (const a of novel.acts) for (const c of a.chapters) for (const sc of c.scenes) normalizeScene(sc);
   const flat = flatScenes(novel);
-  const idx = flat.findIndex((f) => f.scene.id === task.sceneId);
-  const cur = idx >= 0 ? flat[idx] : null;
+  const cur = flat.find((f) => f.scene.id === task.sceneId) || null;
   const scene = cur?.scene;
   const extra = resolveContext(novel, context);
 
-  let message = '', textBefore = '', textAfter = '', scanText = '';
+  // NovelCrafter only knows "text before/after" when there is a position in a scene (beats and rewrites).
+  const contents = { message: '' };
+  let scanText = '';
   if (task.kind === 'beat' && scene) {
     const beat = scene.beats.find((b) => b.id === task.beatId);
     if (!beat) throw Object.assign(new Error('Beat not found'), { status: 400 });
-    message = beat.text || '';
+    contents.message = beat.text || '';
     // New text continues from the end of the beat's section (or the end of the scene if it has none yet).
     const last = scene.blocks.map((b) => b.beatId).lastIndexOf(beat.id);
     const cut = last >= 0 ? last + 1 : scene.blocks.length;
-    textBefore = scene.blocks.slice(0, cut).map((b) => b.text.trim()).filter(Boolean).join('\n\n');
-    textAfter = scene.blocks.slice(cut).map((b) => b.text.trim()).filter(Boolean).join('\n\n');
-    if (words(textBefore).length > 3000) textBefore = lastWords(textBefore, 3000);
-    scanText = message;
+    contents.textBefore = scene.blocks.slice(0, cut).map((b) => b.text.trim()).filter(Boolean).join('\n\n');
+    contents.textAfter = scene.blocks.slice(cut).map((b) => b.text.trim()).filter(Boolean).join('\n\n');
+    if (words(contents.textBefore).length > 3000) contents.textBefore = lastWords(contents.textBefore, 3000);
+    scanText = contents.message;
   } else if (task.kind === 'replace' && scene) {
     const bi = scene.blocks.findIndex((b) => b.id === task.blockId);
     const blk = scene.blocks[bi];
     if (!blk) throw Object.assign(new Error('Text block not found'), { status: 400 });
-    message = blk.text.slice(task.start, task.end);
+    contents.message = blk.text.slice(task.start, task.end);
     const before = scene.blocks.slice(0, bi).filter((b) => b.type === 'text').map((b) => b.text);
     const after = scene.blocks.slice(bi + 1).filter((b) => b.type === 'text').map((b) => b.text);
-    textBefore = [...before, blk.text.slice(0, task.start)].join('\n\n').trim();
-    textAfter = [blk.text.slice(task.end), ...after].join('\n\n').trim();
+    contents.textBefore = [...before, blk.text.slice(0, task.start)].join('\n\n').trim();
+    contents.textAfter = [blk.text.slice(task.end), ...after].join('\n\n').trim();
     // Text written under a story beat is rewritten with that beat in mind.
     const beat = scene.beats.find((b) => b.id === blk.beatId && b.text.trim());
     if (beat) extra.xml.unshift(`<storyBeat>\nThe text being rewritten belongs to this story beat; keep it consistent with it:\n${beat.text.trim()}\n</storyBeat>`);
-    scanText = [message, beat?.text || ''].join('\n');
+    scanText = [contents.message, beat?.text || ''].join('\n');
   } else if (task.kind === 'chat') {
-    message = task.message || '';
-    scanText = [...(task.history || []).map((m) => m.content), message, ...extra.xml].join('\n');
+    contents.message = task.message || '';
+    scanText = [...(task.history || []).map((m) => m.content), contents.message, ...extra.xml].join('\n');
   }
 
+  const inputDefs = effectiveInputs(prompt, prompts);
+  // A scene picked in an input (e.g. "Scene Beats from Summary") also counts for codex detection.
+  for (const d of inputDefs.filter((x) => x.types.includes('scene'))) {
+    const m = /^scene:(.+)$/.exec(String(inputs[d.name] || ''));
+    const f = m && flat.find((x) => x.scene.id === m[1]);
+    if (f) scanText += `\n${f.scene.summary || ''}`;
+  }
   const codexEntries = task.kind === 'summary' ? [] : relevantCodex(novel, scanText, [...extra.codexIds, ...(scene?.codexIds || [])]);
-  const codexContext = codexXml(codexEntries);
-  const pov = povFor(novel, scene);
 
-  const sceneObj = (info) => info && {
-    id: info.scene.id, title: info.scene.title, summary: info.scene.summary,
-    fullText: (s) => (s ? sceneXml(flat.find((f) => f.scene.id === s.id) || info) : sceneXml(info)),
-    toString: () => sceneXml(info),
-  };
-  const sceneVar = cur ? { ...sceneObj(cur), previous: idx > 0 ? sceneObj(flat[idx - 1]) : null } : null;
-
-  const povVar = {
-    type: pov.type,
-    character: (s) => (s ? povFor(novel, flat.find((f) => f.scene.id === s.id)?.scene).character : pov.character),
-    truthy: () => !!pov.type,
-    toString: () => `<pointOfView type="${esc(pov.type)}"${pov.character ? ` character="${esc(pov.character)}"` : ''}/>`,
-  };
-
-  const inputDefs = prompt.inputs || [];
-  const input = (name) => {
-    const key = String(name).toLowerCase();
-    const def = inputDefs.find((d) => d.name.toLowerCase() === key || (d.key || '').toLowerCase() === key);
-    if (def?.type === 'context') return extra.xml;
-    const v = def ? inputs[def.name] : inputs[name];
-    if (Array.isArray(v)) return v.filter((x) => String(x).trim());
-    return v == null ? '' : String(v);
-  };
-
-  const locals = {};
-  const ctx = {
-    vars: {
-      novel: { title: novel.title, language: novel.language || 'General English', tense: novel.tense || 'past tense', hasSeries: false },
-      series: { title: '', description: '' },
-      date: { today: new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) },
-      pov: povVar,
-      message,
-      textBefore,
-      isStartOfText: !textBefore.trim(),
-      hasTextBefore: !!textBefore.trim(),
-      hasTextAfter: !!textAfter.trim(),
-      storySoFar: task.kind === 'beat' && scene ? storySoFar(novel, scene.id) : '',
-      codex: { context: codexContext },
-      personas: settings.persona || '',
-      scene: sceneVar,
+  const ctx = { vars: {}, fns: null };
+  ctx.fns = createFunctions({
+    novel, flat, cur, task, contents, extra, inputDefs, inputs, settings, model, locals: {},
+    codexContext: codexEntries,
+    include: (name) => {
+      const comp = findComponent(prompts, name);
+      if (!comp) throw new Error(`Component with name "${name}" not found. Make sure the component exists in your prompt library.`);
+      return renderTemplate(comp.messages[0].content, ctx);
     },
-    fns: {
-      input,
-      include: (name) => {
-        const comp = prompts.find((p) => p.kind === 'component' && p.name === name && !p.system) || prompts.find((p) => p.kind === 'component' && p.name === name);
-        if (!comp) throw new Error(`Unknown component: ${name}`);
-        return renderTemplate(comp.messages[0].content, ctx);
-      },
-      wordsBefore: (n) => lastWords(textBefore, Number(n) || 200),
-      wordsAfter: (n) => firstWords(textAfter, Number(n) || 200),
-      lastWords: (text, n) => lastWords(toStr(text), Number(n) || 200),
-      wordCount: (t) => wordCount(toStr(t)),
-      multiply: (a, b) => Number(a) * Number(b),
-      divide: (a, b) => Number(a) / Number(b),
-      round: (a) => Math.round(Number(a)),
-      either: (...xs) => xs.find(truthy) ?? '',
-      ifs: (c, a, b = '') => (truthy(c) ? a : b),
-      and: (...xs) => xs.every(truthy),
-      or: (...xs) => xs.some(truthy),
-      not: (x) => !truthy(x),
-      any: (...xs) => xs.flat(),
-      without: (a, b) => {
-        const drop = new Set((Array.isArray(b) ? b : [b]).map((x) => toStr(x).trim()));
-        const list = Array.isArray(a) ? a : toStr(a) ? [a] : [];
-        return list.filter((x) => !drop.has(toStr(x).trim()));
-      },
-      asXml: (v) => (Array.isArray(v) ? v.map(toStr).join('\n') : toStr(v)),
-      removeWhitespace: (s) => toStr(s).replace(/\n{3,}/g, '\n\n').trim(),
-      content: (s) => toStr(s),
-      local: (name, ...rest) => { if (rest.length) { locals[name] = rest[0]; return ''; } return locals[name] ?? ''; },
-    },
-  };
+  });
 
   const messages = [];
   for (const m of prompt.messages) {
@@ -339,7 +235,7 @@ export function buildMessages({ novel: original, settings, prompt, prompts, task
   }
   if (task.kind === 'chat') {
     for (const h of task.history || []) if (h.content?.trim()) messages.push({ role: h.role, content: h.content });
-    messages.push({ role: 'user', content: message });
+    messages.push({ role: 'user', content: contents.message });
   }
   return { messages, codex: codexEntries.map((e) => e.name) };
 }

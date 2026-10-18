@@ -25,25 +25,20 @@
     "inputs": [
       {
         "name": "Words",
-        "type": "number",
+        "description": "How many words should the AI write?",
+        "mode": "single",
         "required": true,
+        "types": [
+          "text",
+          "dropdown"
+        ],
         "options": [
           "200",
           "400",
           "600"
         ],
         "default": "400",
-        "description": "How many words should the AI write?"
-      },
-      {
-        "name": "Instructions",
-        "type": "text",
-        "description": "Any (optional) additional instructions and roles for the AI"
-      },
-      {
-        "name": "Additional Context",
-        "type": "context",
-        "description": "Any additional information to provide to the AI"
+        "placeholder": "e.g. 300"
       }
     ]
   },
@@ -65,20 +60,20 @@
     "inputs": [
       {
         "name": "Words",
-        "type": "number",
+        "description": "How long should the summary be?",
+        "mode": "single",
         "required": true,
+        "types": [
+          "dropdown",
+          "text"
+        ],
         "options": [
           "80",
           "120",
           "300"
         ],
         "default": "80",
-        "description": "How long should the summary be?"
-      },
-      {
-        "name": "Instructions",
-        "type": "text",
-        "description": "Any (optional) additional instructions and roles for the AI"
+        "placeholder": "e.g. 200"
       }
     ]
   },
@@ -100,27 +95,34 @@
     "inputs": [
       {
         "name": "Instructions",
-        "type": "multi",
-        "options": [
-          "Add: Sensory details",
-          "Add: Feelings",
-          "Add: Introspection"
+        "description": "How should the text be expanded?",
+        "mode": "multiple",
+        "required": false,
+        "types": [
+          "dropdown",
+          "text"
         ],
-        "description": "How should the text be expanded?"
+        "options": [
+          "Add: Feelings",
+          "Add: Introspection",
+          "Add: Sensory details"
+        ],
+        "placeholder": "e.g. describe the setting"
       },
       {
         "name": "Length",
-        "type": "choice",
+        "description": "How long should the expanded text be?",
+        "mode": "single",
+        "required": false,
+        "types": [
+          "dropdown",
+          "text"
+        ],
         "options": [
           "Double",
           "Triple"
         ],
-        "description": "How long should the expanded text be?"
-      },
-      {
-        "name": "Additional Context",
-        "type": "context",
-        "description": "Any additional information to provide to the AI"
+        "placeholder": "e.g. 400 words"
       }
     ]
   },
@@ -142,19 +144,25 @@
     "inputs": [
       {
         "name": "Instructions",
-        "type": "text",
+        "description": "How should the text be rephrased?",
+        "mode": "single",
         "required": true,
-        "options": [
-          "Make it more vivid",
-          "Simplify the language",
-          "Fix grammar and flow"
+        "types": [
+          "dropdown",
+          "text"
         ],
-        "description": "How should the text be rephrased?"
-      },
-      {
-        "name": "Additional Context",
-        "type": "context",
-        "description": "Any additional information to provide to the AI"
+        "placeholder": "e.g. Make it more dramatic",
+        "options": [
+          "Add inner thoughts",
+          "Convert to dialogue",
+          "Convert passive to active voice",
+          "Use different words",
+          "Change to: First person POV",
+          "Change to: Third person POV",
+          "Change to: Past tense",
+          "Change to: Present tense",
+          "Show, don't tell"
+        ]
       }
     ]
   },
@@ -176,20 +184,19 @@
     "inputs": [
       {
         "name": "Length",
-        "type": "choice",
+        "description": "How long should the shortened text be?",
+        "mode": "single",
         "required": true,
+        "types": [
+          "dropdown",
+          "text"
+        ],
         "options": [
           "Half",
           "Quarter",
           "Single paragraph"
         ],
-        "default": "Half",
-        "description": "How long should the shortened text be?"
-      },
-      {
-        "name": "Instructions",
-        "type": "text",
-        "description": "Any (optional) additional instructions and roles for the AI"
+        "placeholder": "e.g. 100 words"
       }
     ]
   },
@@ -204,18 +211,7 @@
         "content": "You are a helpful, expert assistant to a novel author.\n\nThey will ask you questions about their story and you will answer them.\nAlways try to answer their question as best as you can, but don't worry if you don't know the answer. You can always ask them to clarify their question.\n\nIt is very important that you do a good job as it is crucial for their story and success.\n\nFor the author, today is {date.today} and they are working on their story \"{novel.title}\".\n\n{! These add things like personas, series info, the codex, etc. !}\n{include(\"Novelcrafter/Chat/DefaultContext\")}\n{include(\"Novelcrafter/Chat/DefaultInstructions\")}"
       }
     ],
-    "inputs": [
-      {
-        "name": "Instructions",
-        "type": "text",
-        "description": "Any (optional) additional instructions and roles for the AI"
-      },
-      {
-        "name": "Additional Context",
-        "type": "context",
-        "description": "Any additional information to provide to the AI"
-      }
-    ]
+    "inputs": []
   },
   {
     "id": "sys-chat-scene-beats-from-summary",
@@ -231,31 +227,32 @@
     "inputs": [
       {
         "name": "Scene",
-        "type": "scene",
+        "description": "The scene we want to develop the beats for.",
+        "mode": "single",
         "required": true,
-        "description": "The scene summary to develop beats for"
+        "types": [
+          "scene"
+        ],
+        "addToContext": true,
+        "sceneMode": "summary"
       },
       {
         "name": "Amount",
-        "type": "number",
+        "description": "How many beats should be generated?",
+        "mode": "single",
         "required": true,
+        "hideInput": true,
+        "types": [
+          "dropdown",
+          "text"
+        ],
         "options": [
           "6",
           "8",
           "12"
         ],
-        "default": "8",
-        "description": "How many beats should be generated?"
-      },
-      {
-        "name": "Instructions",
-        "type": "text",
-        "description": "Any (optional) additional instructions and roles for the AI"
-      },
-      {
-        "name": "Additional Context",
-        "type": "context",
-        "description": "Any additional information to provide to the AI"
+        "default": "12",
+        "placeholder": "e.g. 10"
       }
     ]
   },
@@ -274,38 +271,50 @@
       {
         "name": "Genre",
         "key": "role",
-        "type": "text",
+        "description": "This will determine the genre that your AI assistant specialises in.",
+        "mode": "single",
         "required": true,
-        "options": [
-          "Fantasy",
-          "Romance",
-          "Science Fiction",
-          "Thriller",
-          "Literary"
+        "types": [
+          "text",
+          "dropdown"
         ],
-        "description": "This will determine the genre that your AI assistant specialises in."
+        "options": [
+          "Cozy: Fantasy",
+          "Cozy: Mystery",
+          "Cozy: Romance",
+          "Fantasy: Dark",
+          "Fantasy: Epic/High",
+          "Fantasy: Paranormal",
+          "Fantasy: Urban",
+          "Horror: Psychological",
+          "Horror: Supernatural",
+          "Romance: Billionaire",
+          "Romance: Enemies to Lovers",
+          "Romance: Erotic",
+          "Romance: Paranormal",
+          "Romance: Second Chance",
+          "Romance: Sweet/Clean",
+          "Romance: Uniform",
+          "Sci-Fi: Dystopian",
+          "Sci-Fi: Space Opera",
+          "Sci-Fi: Steampunk"
+        ]
       },
       {
         "name": "Feedback",
-        "type": "choice",
+        "description": "What kind of feedback do you want from the AI?",
+        "mode": "single",
+        "required": false,
+        "types": [
+          "dropdown"
+        ],
         "options": [
           "Pacing",
           "Dialogue",
           "Characterization",
           "Structural",
           "Developmental"
-        ],
-        "description": "What kind of feedback do you want from the AI?"
-      },
-      {
-        "name": "Instructions",
-        "type": "text",
-        "description": "Any (optional) additional instructions and roles for the AI"
-      },
-      {
-        "name": "Additional Context",
-        "type": "context",
-        "description": "Any additional information to provide to the AI"
+        ]
       }
     ]
   },
@@ -320,7 +329,19 @@
         "content": "{! We don't want to include codex entries twice in the additional context !}\n{! As such, we store this in the local context and use it here !}\n{local('context', without(input(\"Additional Context\"), codex.context))}\n\n{#if local('context')}\nHere is some additional information to help you with your answer:\n<additionalContext>\n{asXml(local('context'))}\n</additionalContext>\n{#endif}"
       }
     ],
-    "inputs": []
+    "inputs": [
+      {
+        "name": "Additional Context",
+        "displayName": "Context",
+        "description": "Any additional information to provide to the AI",
+        "mode": "multiple",
+        "required": false,
+        "addToContext": true,
+        "types": [
+          "context"
+        ]
+      }
+    ]
   },
   {
     "id": "sys-comp-additionalinstructions",
@@ -333,7 +354,19 @@
         "content": "{#if input(\"Instructions\")}\nAdditional instructions have been provided to tweak your role, behavior and capabilities. Follow them closely:\n<instructions>\n{input(\"Instructions\")}\n</instructions>\n{#endif}"
       }
     ],
-    "inputs": []
+    "inputs": [
+      {
+        "name": "Instructions",
+        "description": "Any (optional) additional instructions and roles for the AI",
+        "mode": "single",
+        "required": false,
+        "hideInput": true,
+        "types": [
+          "text"
+        ],
+        "placeholder": "e.g. You are a..."
+      }
+    ]
   },
   {
     "id": "sys-comp-chat-defaultcontext",

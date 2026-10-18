@@ -34,7 +34,7 @@ Development (two terminals): `npm run dev:server` and `npm run dev:web` (UI on h
 | Read aloud | Chatterbox (local), ElevenLabs or any OpenAI-style speech server (AI Connection → Voice). Narrator voice plus one voice per character (**Voices…**, auto-match by name). Dialogue speakers are guessed from names/"said" and back-and-forth; fix them in **Speakers…** or let the AI label them. Clips are cached in `data/audio-cache` |
 | Profile | Username and profile picture (header, sidebar, chat), used as author for new novels |
 | History | Autosave versions every 10 minutes, labelled versions, word-level diff per scene, restore one scene or the whole novel (a safety version is saved first) |
-| Prompts | NovelCrafter's 15 system prompts, captured word for word; clone and edit your own. A custom component with the same name overrides the system one |
+| Prompts | NovelCrafter's 15 system prompts and their inputs (dropdown options, defaults, scene pickers), word for word as of NovelCrafter build f0d346. Included components bring their own inputs (Instructions, Additional Context). The template engine has NovelCrafter's function library (`scene.*`, `chapter.*`, `act.*`, `codex.*`, `pov.*`, `storySoFar`, `storyToCome`, `textSoFar`, list/text/math/logic helpers); the editor highlights template code and has a searchable function reference. Clone and edit your own; a custom component with the same name overrides the system one |
 
 ## How prompts are built
 

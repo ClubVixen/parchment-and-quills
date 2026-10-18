@@ -7,10 +7,20 @@ import { chapterNumber, flatScenes, sceneLabel } from '../util';
 
 export type Inputs = Record<string, string | string[]>;
 
+/** Inputs a prompt shows: its own plus those of included components (e.g. Instructions, Additional Context). */
+export const promptInputs = (p: Prompt | undefined): PromptInput[] => p?.allInputs || p?.inputs || [];
+
 export function defaultInputs(p: Prompt | undefined): Inputs {
   const out: Inputs = {};
-  for (const i of p?.inputs || []) if (i.default) out[i.name] = i.default;
+  for (const i of promptInputs(p)) if (i.default != null && i.default !== '') out[i.name] = i.default;
   return out;
+}
+
+const isEmpty = (v: string | string[] | undefined) => (Array.isArray(v) ? !v.some((x) => x.trim()) : !String(v ?? '').trim());
+
+/** Required inputs that still have no value (context inputs are never required). */
+export function missingInputs(p: Prompt | undefined, inputs: Inputs): PromptInput[] {
+  return promptInputs(p).filter((i) => i.required && !i.types.includes('context') && isEmpty(inputs[i.name] ?? i.default));
 }
 
 // ---------- streaming hook ----------
@@ -86,64 +96,104 @@ export function InputsForm({ prompt, inputs, setInputs, context, setContext }: {
   prompt: Prompt; inputs: Inputs; setInputs: (i: Inputs) => void; context: ContextItem[]; setContext: (c: ContextItem[]) => void;
 }) {
   const set = (name: string, v: string | string[]) => setInputs({ ...inputs, [name]: v });
-  return (
-    <div className="form">
-      {prompt.inputs.map((inp) => (
-        <div key={inp.name} className="field">
-          <div className="field-head"><b>{inp.name}</b> {inp.required && <span className="chip tiny">Required</span>} <span className="muted small">{inp.description}</span></div>
-          <InputField inp={inp} value={inputs[inp.name]} onChange={(v) => set(inp.name, v)} context={context} setContext={setContext} />
-        </div>
-      ))}
-      {!prompt.inputs.length && <div className="muted small">This prompt has no inputs.</div>}
+  const defs = promptInputs(prompt);
+  const field = (inp: PromptInput) => (
+    <div key={inp.name} className="field">
+      <div className="field-head"><b>{inp.displayName || inp.name}</b> {inp.required && <span className="chip tiny">Required</span>} <span className="muted small">{inp.description}</span></div>
+      <InputField inp={inp} value={inputs[inp.name] ?? inp.default} onChange={(v) => set(inp.name, v)} context={context} setContext={setContext} />
     </div>
   );
+  // Like NovelCrafter, inputs marked hideInput (Instructions, beat Amount) sit behind "More options".
+  const shown = defs.filter((i) => !i.hideInput);
+  const more = defs.filter((i) => i.hideInput);
+  const changed = more.some((i) => !isEmpty(inputs[i.name]) && String(inputs[i.name]) !== String(i.default ?? ''));
+  return (
+    <div className="form">
+      {shown.map(field)}
+      {!!more.length && (
+        <details className="more-inputs" open={changed}>
+          <summary className="muted small">More options: {more.map((i) => i.displayName || i.name).join(', ')}</summary>
+          {more.map(field)}
+        </details>
+      )}
+      {!defs.length && <div className="muted small">This prompt has no inputs.</div>}
+    </div>
+  );
+}
+
+/** "Group: Label" options are grouped, like NovelCrafter's dropdowns ("Fantasy: Dark" goes under Fantasy). */
+function groupOptions(options: string[]) {
+  const groups = new Map<string, string[]>();
+  for (const o of options) {
+    const i = o.indexOf(': ');
+    const g = i > 0 ? o.slice(0, i) : '';
+    groups.set(g, [...(groups.get(g) || []), o]);
+  }
+  return groups;
 }
 
 function InputField({ inp, value, onChange, context, setContext }: {
   inp: PromptInput; value: string | string[] | undefined; onChange: (v: string | string[]) => void; context: ContextItem[]; setContext: (c: ContextItem[]) => void;
 }) {
   const { novel } = useWorkspace();
-  const str = Array.isArray(value) ? '' : value || '';
-  if (inp.type === 'context') return <ContextPicker value={context} onChange={setContext} />;
-  if (inp.type === 'multi') {
-    const arr = Array.isArray(value) ? value : value ? [value] : [];
-    const chosen = arr.filter((x) => inp.options?.includes(x));
-    const free = arr.filter((x) => !inp.options?.includes(x)).join('\n');
-    return (
-      <>
-        <div className="chips">
-          {inp.options?.map((o) => (
-            <button key={o} className={chosen.includes(o) ? 'chip toggle on' : 'chip toggle'} onClick={() => onChange(chosen.includes(o) ? [...chosen.filter((x) => x !== o), ...(free ? [free] : [])] : [...chosen, o, ...(free ? [free] : [])])}>{o}</button>
-          ))}
-        </div>
-        <textarea className="input" rows={2} placeholder="Additional instructions (optional)" value={free} onChange={(e) => onChange([...chosen, ...(e.target.value ? [e.target.value] : [])])} />
-      </>
-    );
-  }
-  if (inp.type === 'scene') {
+  const types = inp.types;
+  const options = types.includes('dropdown') ? inp.options || [] : [];
+  const allowText = types.includes('text');
+  if (types.includes('context')) return <ContextPicker value={context} onChange={setContext} />;
+  if (types.includes('checkbox')) return <label className="row small"><input type="checkbox" checked={value === 'true'} onChange={(e) => onChange(e.target.checked ? 'true' : '')} /> Yes</label>;
+
+  if (types.includes('scene')) {
     const scenes = flatScenes(novel);
+    const str = Array.isArray(value) ? value[0] || '' : value || '';
+    const picked = str.startsWith('scene:') ? str.slice(6) : '';
+    const sc = scenes.find((r) => r.scene.id === picked);
     return (
       <>
-        <select className="input" value="" onChange={(e) => { const r = scenes.find((s) => s.scene.id === e.target.value); if (r) onChange(r.scene.summary || ''); }}>
-          <option value="">Fill from a scene summary…</option>
-          {scenes.map((r) => <option key={r.scene.id} value={r.scene.id} disabled={!r.scene.summary}>{sceneLabel(r)}{r.scene.summary ? '' : ' (no summary)'}</option>)}
+        <select className="input" value={picked} onChange={(e) => onChange(e.target.value ? `scene:${e.target.value}` : '')}>
+          <option value="">{allowText ? 'Choose a scene… (or write below)' : 'Choose a scene…'}</option>
+          {scenes.map((r) => <option key={r.scene.id} value={r.scene.id}>{sceneLabel(r)}{inp.sceneMode !== 'content' && !r.scene.summary ? ' (no summary)' : ''}</option>)}
         </select>
-        <textarea className="input" rows={4} value={str} onChange={(e) => onChange(e.target.value)} placeholder="Scene summary" />
+        {sc && <div className="muted small">{inp.sceneMode === 'content' ? 'The scene text is sent.' : sc.scene.summary || 'This scene has no summary yet.'}</div>}
+        {allowText && !picked && <textarea className="input" rows={3} value={str} placeholder={inp.placeholder || 'Scene summary'} onChange={(e) => onChange(e.target.value)} />}
       </>
     );
   }
-  const options = inp.options || [];
+
+  if (inp.mode === 'multiple') {
+    const arr = Array.isArray(value) ? value : value ? [value] : [];
+    const chosen = arr.filter((x) => options.includes(x));
+    const free = arr.filter((x) => !options.includes(x)).join('\n');
+    const toggle = (o: string) => onChange([...(chosen.includes(o) ? chosen.filter((x) => x !== o) : [...chosen, o]), ...(free ? [free] : [])]);
+    return (
+      <>
+        {!!options.length && <div className="chips">{options.map((o) => <button key={o} className={chosen.includes(o) ? 'chip toggle on' : 'chip toggle'} onClick={() => toggle(o)}>{o}</button>)}</div>}
+        {allowText && <textarea className="input" rows={2} placeholder={inp.placeholder || 'Your own instructions (optional)'} value={free} onChange={(e) => onChange([...chosen, ...(e.target.value ? [e.target.value] : [])])} />}
+      </>
+    );
+  }
+
+  const str = Array.isArray(value) ? value.join('\n') : value || '';
+  const isOption = options.includes(str);
+  const groups = groupOptions(options);
+  const asSelect = options.length > 8 || groups.size > 1;
   return (
     <div className="input-with-options">
-      {!!options.length && (
+      {!!options.length && (asSelect ? (
+        <select className="input" value={isOption ? str : ''} onChange={(e) => onChange(e.target.value)}>
+          <option value="">{allowText ? 'Choose… (or type your own below)' : 'Choose…'}</option>
+          {[...groups].map(([group, opts]) => (group
+            ? <optgroup key={group} label={group}>{opts.map((o) => <option key={o} value={o}>{o}</option>)}</optgroup>
+            : opts.map((o) => <option key={o} value={o}>{o}</option>)))}
+        </select>
+      ) : (
         <div className="chips">
           {options.map((o) => <button key={o} className={str === o ? 'chip toggle on' : 'chip toggle'} onClick={() => onChange(str === o ? '' : o)}>{o}</button>)}
-          {(inp.type === 'number' || inp.type === 'choice') && <span className="muted small">or</span>}
+          {allowText && <span className="muted small">or</span>}
         </div>
-      )}
-      {inp.type === 'text'
-        ? <textarea className="input" rows={3} value={str} onChange={(e) => onChange(e.target.value)} placeholder={inp.description} />
-        : <input className="input" value={options.includes(str) ? '' : str} placeholder={inp.type === 'number' ? 'e.g. 300' : 'Custom…'} onChange={(e) => onChange(e.target.value)} />}
+      ))}
+      {allowText && (options.length
+        ? <input className="input" value={isOption ? '' : str} placeholder={inp.placeholder || 'Your own…'} onChange={(e) => onChange(e.target.value)} />
+        : <textarea className="input" rows={3} value={str} placeholder={inp.placeholder || inp.description} onChange={(e) => onChange(e.target.value)} />)}
     </div>
   );
 }
@@ -158,6 +208,7 @@ export function contextLabel(novel: ReturnType<typeof useWorkspace>['novel'], c:
     case 'codex': return `Codex: ${novel.codex.find((e) => e.id === c.id)?.name || '?'}`;
     case 'scene': { const r = scenes.find((s) => s.scene.id === c.id); return r ? `Scene text: ${sceneLabel(r)}` : 'Scene (deleted)'; }
     case 'sceneSummary': { const r = scenes.find((s) => s.scene.id === c.id); return r ? `Summary: ${sceneLabel(r)}` : 'Summary (deleted)'; }
+    case 'act': { const i = novel.acts.findIndex((a) => a.id === c.id); return i >= 0 ? `Act ${i + 1}${novel.acts[i].title ? `: ${novel.acts[i].title}` : ''}` : 'Act (deleted)'; }
     case 'chapter': { const ch = novel.acts.flatMap((a) => a.chapters).find((x) => x.id === c.id); return ch ? `Chapter ${chapterNumber(novel, ch.id)}${ch.title ? `: ${ch.title}` : ''}` : 'Chapter (deleted)'; }
     case 'text': return `Note: ${c.text.slice(0, 40)}`;
   }
@@ -194,6 +245,7 @@ export function ContextPicker({ value, onChange }: { value: ContextItem[]; onCha
           <select className="input inline" value={kind} onChange={(e) => { setKind(e.target.value as ContextItem['type']); setPick(''); }}>
             <option value="outline">Novel outline (all summaries)</option>
             <option value="manuscript">Full manuscript</option>
+            <option value="act">An act (full text)</option>
             <option value="chapter">A chapter (full text)</option>
             <option value="scene">A scene (full text)</option>
             <option value="sceneSummary">A scene summary</option>
@@ -210,6 +262,12 @@ export function ContextPicker({ value, onChange }: { value: ContextItem[]; onCha
             <select className="input inline" value={pick} onChange={(e) => setPick(e.target.value)}>
               <option value="">Choose chapter…</option>
               {chapters.map((c) => <option key={c.id} value={c.id}>Chapter {chapterNumber(novel, c.id)}{c.title ? `: ${c.title}` : ''}</option>)}
+            </select>
+          )}
+          {kind === 'act' && (
+            <select className="input inline" value={pick} onChange={(e) => setPick(e.target.value)}>
+              <option value="">Choose act…</option>
+              {novel.acts.map((a, i) => <option key={a.id} value={a.id}>Act {i + 1}{a.title ? `: ${a.title}` : ''}</option>)}
             </select>
           )}
           {kind === 'codex' && (
@@ -251,7 +309,7 @@ export function GenerateDialog({ kind, initial, buildRequest, onGenerate, onClos
   const [previewErr, setPreviewErr] = useState('');
 
   const result: DialogResult = { promptId, inputs, model, context };
-  const missing = prompt?.inputs.filter((i) => i.required && i.type !== 'context' && !(Array.isArray(inputs[i.name]) ? (inputs[i.name] as string[]).length : String(inputs[i.name] || '').trim())) || [];
+  const missing = missingInputs(prompt, inputs);
 
   useEffect(() => {
     if (tab !== 'preview') return;

@@ -1,4 +1,4 @@
-import type { AudioScript, GenerateRequest, HistoryEntry, Novel, NovelSummary, Prompt, PromptMessage, Settings, Thread } from './types';
+import type { AudioScript, FunctionDoc, GenerateRequest, HistoryEntry, Novel, NovelSummary, Prompt, PromptMessage, Settings, Thread } from './types';
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -18,6 +18,7 @@ export const api = {
   models: () => call<{ id: string; maxLen: number | null }[]>('GET', '/models'),
   prompts: () => call<Prompt[]>('GET', '/prompts'),
   saveCustomPrompts: (list: Prompt[]) => call<Prompt[]>('PUT', '/prompts/custom', list),
+  templateFunctions: () => call<FunctionDoc[]>('GET', '/template-functions'),
 
   novels: () => call<NovelSummary[]>('GET', '/novels'),
   createNovel: (opts: { title: string; author: string; language: string }) => call<Novel>('POST', '/novels', opts),
