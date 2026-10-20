@@ -3,24 +3,50 @@ import { api } from '../api';
 import { useWorkspace } from '../views/Workspace';
 import { Diff } from './History';
 import { Markdown } from './Markdown';
-import { blankScene, chapterNumber, flatScenes, newId, numberedItems, parseReply, parseSceneText, sceneLabel, sceneRef, serializeScene, wordCount, type SceneRef } from '../util';
+import { blankScene, chapterNumber, flatScenes, newId, numberedItems, parseReply, parseSceneText, sceneLabel, sceneRef, serializeScene, wordCount, type EditTag, type ReplyPart, type SceneRef } from '../util';
+import { ChangeButtons, ChangeCard } from './Changes';
 
 const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
 
-/** Renders an AI reply: Markdown text plus a card for every <revision> block. */
-export function AssistantContent({ content, streaming = false }: { content: string; streaming?: boolean }) {
-  const { novel } = useWorkspace();
+const DRAFT_LABEL: Record<EditTag, (a: Record<string, string>) => string> = {
+  revision: (a) => `Rewriting scene ${a.scene || ''}`,
+  newScene: (a) => `New scene${a.title ? ` “${a.title}”` : ''} in chapter ${a.chapter || ''}`,
+  newChapter: (a) => `New chapter${a.title ? ` “${a.title}”` : ''}`,
+  sceneSummary: (a) => `New summary for scene ${a.scene || ''}`,
+  codexEntry: (a) => `Codex: ${a.newName || a.name || ''}`,
+};
+
+/**
+ * Renders an AI reply: Markdown text plus a card for every edit tag. Once the reply is saved, each tag is a
+ * pending change (see server/changes.js) with Accept / Reject; while streaming it shows as a draft.
+ */
+export function AssistantContent({ content, streaming = false, messageId }: { content: string; streaming?: boolean; messageId?: string }) {
+  const { changes } = useWorkspace();
   const parts = parseReply(content);
-  const revisions = parts.filter((p) => p.kind === 'revision' && p.complete) as { ref: string; text: string }[];
-  const flat = flatScenes(novel);
-  const pending = revisions.filter((r) => { const f = flat.find((x) => sceneRef(x) === r.ref); return f && norm(serializeScene(f.scene)) !== norm(r.text); });
+  const edits = parts.filter((p): p is Extract<ReplyPart, { kind: 'edit' }> => p.kind === 'edit');
+  const mine = messageId ? changes.filter((c) => c.messageId === messageId) : [];
+  // Replies from before changes were tracked: their revisions still get the old commit cards.
+  const legacy = !streaming && messageId && !mine.length ? edits.filter((p) => p.tag === 'revision' && p.complete) : [];
   return (
     <>
-      {parts.map((p, i) => p.kind === 'text'
-        ? <Markdown key={i} text={p.text} />
-        : <RevisionCard key={i} refId={p.ref} text={p.text} complete={p.complete} />)}
-      {!streaming && pending.length > 1 && <CommitAll revisions={pending} />}
-      {!streaming && !revisions.length && <AddBeats content={content} />}
+      {parts.map((p, i) => {
+        if (p.kind === 'text') return <Markdown key={i} text={p.text} />;
+        const change = mine.find((c) => c.index === p.index);
+        if (change && !streaming) return <ChangeCard key={i} change={change} />;
+        if (legacy.includes(p)) return <RevisionCard key={i} refId={p.attrs.scene || ''} text={p.text} complete />;
+        if (streaming || !p.complete) return (
+          <div key={i} className="change-card draft">
+            <div className="change-head"><span className="chip tiny ai-chip">✦ AI</span><b className="grow">{DRAFT_LABEL[p.tag](p.attrs)}</b><span className="muted tiny">{p.complete ? 'done' : 'writing…'}</span></div>
+            <div className="change-body draft-text">{p.text.slice(-600)}</div>
+          </div>
+        );
+        return <div key={i} className="revision missing">{DRAFT_LABEL[p.tag](p.attrs)}: nothing to change (it matches the book already, or points at a scene or chapter that doesn't exist).</div>;
+      })}
+      {!streaming && mine.filter((c) => c.status === 'pending').length > 1 && (
+        <div className="row"><span className="muted small grow">All changes in this reply:</span><ChangeButtons list={mine} /></div>
+      )}
+      {!streaming && legacy.length > 1 && <CommitAll revisions={legacy.map((p) => ({ ref: p.attrs.scene || '', text: p.text }))} />}
+      {!streaming && !edits.length && <AddBeats content={content} />}
     </>
   );
 }

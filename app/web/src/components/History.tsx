@@ -24,7 +24,7 @@ function compare(old: Novel, cur: Novel): Change[] {
 }
 
 /** Word-level diff (LCS). Falls back to plain old/new for very long texts. */
-function diffWords(a: string, b: string) {
+export function diffWords(a: string, b: string) {
   const x = a.split(/(\s+)/), y = b.split(/(\s+)/);
   if (x.length * y.length > 4_000_000) return null;
   const dp = Array.from({ length: x.length + 1 }, () => new Uint32Array(y.length + 1));

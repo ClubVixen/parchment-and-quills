@@ -138,8 +138,32 @@ export type NovelVoices = { narrator?: string; characters?: Record<string, strin
 export type AudioSegment = { para: number; speaker: string; text: string; quote: boolean };
 export type AudioScript = { chapterId: string; hash: string; mode: 'simple' | 'ai'; segments: AudioSegment[]; overrides?: Record<string, string> };
 
-/** What a chat thread is allowed to edit. */
-export type EditTarget = { type: 'scene' | 'chapter'; id: string } | null;
+/** Which manuscript text a chat thread shares with the AI for rewriting ("novel" = all of it). */
+export type EditTarget = { type: 'scene' | 'chapter' | 'novel'; id: string } | null;
+
+export type CodexFields = { name: string; type: string; aliases: string[]; tags: string[]; description: string };
+/** A change the AI proposed in a chat, waiting for the author to accept or reject it. */
+export type Change = {
+  id: string;
+  threadId: string;
+  messageId: string;
+  index: number;
+  kind: 'revision' | 'newScene' | 'newChapter' | 'sceneSummary' | 'codexEntry';
+  status: 'pending' | 'accepted' | 'rejected';
+  createdAt: string;
+  decidedAt?: string;
+  sceneId?: string;
+  chapterId?: string;
+  afterSceneId?: string | null;
+  afterChapterId?: string | null;
+  title?: string;
+  summary?: string;
+  text?: string;
+  /** Scene text or summary when the change was proposed (revisions, summaries); old fields for codex updates. */
+  base?: string | CodexFields | null;
+  entryId?: string | null;
+  codex?: CodexFields;
+};
 
 export type HistoryEntry = { file: string; savedAt: string; label: string; auto: boolean; words: number };
 

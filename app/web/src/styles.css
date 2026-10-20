@@ -502,3 +502,42 @@ textarea.input.summary, textarea.input.beat-text { resize: none; }
 .bft-beats { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .bft-beats li { border-left: 4px solid; padding-left: 8px; }
 .bft-beats textarea { width: 100%; }
+
+/* ---------- AI-proposed changes ---------- */
+.ai-chip { background: #efe9fb; color: #5b3fb0; border-color: #ddd2f6; }
+.btn.ai-changes { background: #efe9fb; border-color: #cdbff1; color: #4a2fa0; font-weight: 600; }
+.change-card { border: 1px solid #ddd2f6; border-left: 4px solid #8b6fe0; border-radius: 8px; background: var(--panel); margin: 10px 0; }
+.change-card.accepted { border-left-color: #3e9a5c; opacity: .8; }
+.change-card.rejected { border-left-color: #b9b5ad; opacity: .65; }
+.change-card.draft { border-style: dashed; }
+.change-head, .change-foot { display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
+.change-head { border-bottom: 1px solid var(--line); }
+.change-foot { border-top: 1px solid var(--line); }
+.change-body { padding: 8px 12px; max-height: 520px; overflow: auto; }
+.ms-scene-body .change-body, .pending-insert .change-body { max-height: none; }
+.draft-text { white-space: pre-wrap; font-size: 12.5px; color: var(--muted); max-height: 160px; }
+.change-buttons { display: inline-flex; gap: 6px; }
+.change-status { font-size: 12.5px; font-weight: 600; }
+.change-status.accepted { color: #2f7d4a; }
+.change-status.rejected { color: var(--muted); }
+.prose-diff { font-family: var(--serif); font-size: 17px; line-height: 1.7; }
+.prose-diff.small { font-size: 14.5px; line-height: 1.55; }
+.prose-diff p, .read-diff p { margin: 0 0 .8em; white-space: pre-wrap; }
+.diff-para.add, .diff-beat.add { background: #e6f6e8; box-shadow: -6px 0 0 #e6f6e8, 6px 0 0 #e6f6e8; }
+.diff-para.del, .diff-beat.del { background: #fdeceb; box-shadow: -6px 0 0 #fdeceb, 6px 0 0 #fdeceb; }
+.diff-para.add span.add, .diff-para.del span.del, .diff-beat.add span.add { background: transparent; }
+.diff-para.del, .diff-beat.del { text-decoration: line-through; color: #8a1c13; }
+.diff-beat { font-family: var(--sans); font-size: 13px; color: #5b3fb0; margin: 12px 0 6px; }
+.scene-proposal-bar { display: flex; gap: 8px; align-items: center; background: #efe9fb; border: 1px solid #ddd2f6; border-radius: 6px; padding: 6px 10px; font-size: 13px; color: #4a2fa0; }
+.pending-insert { margin: 14px 0; }
+.pending-title { color: #5b3fb0; }
+.ms-chapter.pending { border: 2px dashed #cdbff1; background: #faf8ff; }
+.codex-diff-row { margin: 4px 0; }
+.codex-diff-row .del, .codex-diff-row .add { padding: 0 4px; border-radius: 3px; }
+.codex-proposals { padding: 0 8px; }
+.codex-proposals .change-card { margin: 6px 0; }
+.changes-drawer h3 { margin: 14px 0 4px; font-family: var(--sans); font-size: 14px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
+.read-proposal { border-left: 3px solid #8b6fe0; padding-left: 14px; margin: 8px 0 16px -17px; }
+.read-proposal-bar { display: flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 13px; color: #4a2fa0; margin-bottom: 8px; }
+.read-diff p { text-indent: inherit; }
+.read-proposed-chapter h1 { color: #5b3fb0; }

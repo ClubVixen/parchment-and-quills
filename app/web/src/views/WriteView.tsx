@@ -6,13 +6,15 @@ import { beatColor, blankScene, chapterNumber, flatScenes, mentions, mergeBlocks
 import { AutoTextarea } from '../components/AutoTextarea';
 import { SceneCodexChips, SceneMenu, useSceneOps, useSummarizer } from '../components/SceneTools';
 import { BeatsFromTextDialog } from '../components/BeatsFromText';
+import { ChangeCard, newChaptersAfter, newScenesAfter, PendingInsert, sceneChanges } from '../components/Changes';
 import { ContextPicker, defaultInputs, GenerateDialog, ModelSelect, promptInputs, Reasoning, useGeneration, type DialogResult, type Inputs } from '../components/Generate';
 
 type Caret = { blockId: string; pos: number } | null;
 
 export function WriteView() {
-  const { novel, focusedSceneId } = useWorkspace();
+  const { novel, focusedSceneId, changes } = useWorkspace();
   const [chapterFilter, setChapterFilter] = useState('');
+  const chapterIds = novel.acts.flatMap((a) => a.chapters.map((c) => c.id));
   const [beatsFor, setBeatsFor] = useState<string | null>(null);
   const chapters = novel.acts.flatMap((a, ai) => a.chapters.map((c) => ({ c, ai })));
 
@@ -39,7 +41,8 @@ export function WriteView() {
             <div key={act.id}>
               <div className="ms-act">Act {ai + 1}{act.title ? `: ${act.title}` : ''}</div>
               {visible.map((ch) => (
-                <div key={ch.id} className="ms-chapter">
+                <div key={ch.id}>
+                <div className="ms-chapter">
                   <div className="ms-chapter-head">
                     <h1 className="ms-chapter-title">{ch.title || `Chapter ${chapterNumber(novel, ch.id)}`}</h1>
                     <button className="btn ghost small" onClick={() => setBeatsFor(ch.id)} title="Let the AI read this chapter and add its beats">∿ Beats from text</button>
@@ -48,9 +51,12 @@ export function WriteView() {
                     <div key={s.id}>
                       {si > 0 && <div className="scene-divider">⟡</div>}
                       <SceneEditor scene={s} number={si + 1} chapterNo={chapterNumber(novel, ch.id)} />
+                      {newScenesAfter(changes, ch, s.id).map((c) => <PendingInsert key={c.id} change={c} />)}
                     </div>
                   ))}
                   <ChapterAddScene chapterId={ch.id} />
+                </div>
+                {newChaptersAfter(changes, ch.id, chapterIds).map((c) => <div key={c.id} className="ms-chapter pending"><PendingInsert change={c} /></div>)}
                 </div>
               ))}
             </div>
@@ -144,6 +150,10 @@ function SceneEditor({ scene, number, chapterNo }: { scene: Scene; number: numbe
   const [openBeat, setOpenBeat] = useState<{ id: string; mode: 'edit' | 'ai' } | null>(null);
   const beats = scene.beats || [];
   const blocks = textBlocks(scene);
+  const { changes } = useWorkspace();
+  const proposals = sceneChanges(changes, scene.id);
+  const rewrite = proposals.find((c) => c.kind === 'revision');
+  const [showRewrite, setShowRewrite] = useState(true);
 
   const jump = (beatId: string) => {
     const first = blocks.find((b) => b.beatId === beatId);
@@ -169,7 +179,14 @@ function SceneEditor({ scene, number, chapterNo }: { scene: Scene; number: numbe
         </div>
       </div>
       <div className="ms-scene-body">
-        {blocks.map((b, i) => {
+        {proposals.filter((c) => c.kind === 'sceneSummary').map((c) => <ChangeCard key={c.id} change={c} inBook />)}
+        {rewrite && (
+          <div className="scene-proposal-bar">
+            <span className="grow">✦ The AI proposed a rewrite of this scene.{showRewrite ? ' Showing it with the changes highlighted.' : ''}</span>
+            <button className="btn ghost tiny" onClick={() => setShowRewrite(!showRewrite)}>{showRewrite ? 'Edit current text instead' : 'Show proposed changes'}</button>
+          </div>
+        )}
+        {rewrite && showRewrite ? <ChangeCard change={rewrite} inBook /> : blocks.map((b, i) => {
           const sectionStart = !!b.beatId && blocks[i - 1]?.beatId !== b.beatId;
           const beatNo = beats.findIndex((x) => x.id === b.beatId) + 1;
           return (

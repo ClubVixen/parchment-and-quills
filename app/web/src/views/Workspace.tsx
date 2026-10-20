@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { Avatar, navigate, useApp, type Mode } from '../App';
-import type { Novel, Thread } from '../types';
+import type { Change, Novel, Thread } from '../types';
+import { applyChange, changeLabel, isStale } from '../changes';
+import { ChangesDrawer } from '../components/Changes';
 import { LANGUAGES, normalizeNovel, novelWords } from '../util';
 import { POV_STYLES, povStyle } from '../pov';
 import { CoverButtons, CoverImage } from '../components/Cover';
@@ -28,6 +30,12 @@ type WorkspaceState = {
   activeThreadId: string | null;
   readChapter: (chapterId: string | null) => void;
   readChapterId: string | null;
+  /** AI-proposed changes from chats (all statuses). */
+  changes: Change[];
+  reloadChanges: () => Promise<Change[]>;
+  /** Accept (apply, after saving a history version) or reject changes. */
+  decideChanges: (list: Change[], status: 'accepted' | 'rejected') => Promise<void>;
+  openChanges: () => void;
 };
 const Ctx = createContext<WorkspaceState>(null!);
 export const useWorkspace = () => useContext(Ctx);
@@ -45,6 +53,8 @@ export function Workspace({ novelId, mode }: { novelId: string; mode: Mode }) {
   const [focusedSceneId, setFocusedSceneId] = useState<string | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [readChapterId, setReadChapterId] = useState<string | null>(null);
+  const [changes, setChanges] = useState<Change[]>([]);
+  const [changesOpen, setChangesOpen] = useState(false);
 
   const ref = useRef<Novel | null>(null);
   const timer = useRef<number | undefined>(undefined);
@@ -66,6 +76,13 @@ export function Workspace({ novelId, mode }: { novelId: string; mode: Mode }) {
     return t;
   }, [novelId]);
   useEffect(() => { reloadThreads(); }, [reloadThreads]);
+
+  const reloadChanges = useCallback(async () => {
+    const c = await api.changes(novelId);
+    setChanges(c);
+    return c;
+  }, [novelId]);
+  useEffect(() => { reloadChanges(); }, [reloadChanges]);
 
   const doSave = useCallback(async () => {
     window.clearTimeout(timer.current);
@@ -103,6 +120,25 @@ export function Workspace({ novelId, mode }: { novelId: string; mode: Mode }) {
   }, [save]);
   useEffect(() => () => { if (ref.current) void doSave(); }, [doSave]);
 
+  const decideChanges = async (list: Change[], status: 'accepted' | 'rejected') => {
+    if (!list.length || !ref.current) return;
+    let decided = list;
+    if (status === 'accepted') {
+      const stale = list.filter((c) => isStale(ref.current!, c));
+      if (stale.length && !confirm(`${stale.map((c) => changeLabel(ref.current!, c)).join(', ')}: you edited this after the AI suggested the change. Accepting replaces your newer edits (a history version is saved first). Accept anyway?`)) return;
+      await doSave();
+      await api.snapshot(novelId, `Before AI change – ${list.length > 1 ? `${list.length} changes` : changeLabel(ref.current, list[0])}`);
+      const failed = new Set<string>();
+      const messages: string[] = [];
+      update((n) => { for (const c of list) { try { applyChange(n, c); } catch (e) { failed.add(c.id); messages.push((e as Error).message); } } });
+      await doSave();
+      if (failed.size) setError(`Could not apply ${failed.size} change${failed.size === 1 ? '' : 's'}: ${messages.join('; ')}`);
+      decided = list.filter((c) => !failed.has(c.id));
+    }
+    for (const c of decided) await api.setChangeStatus(novelId, c.id, status);
+    await reloadChanges();
+  };
+
   if (error && !novel) return <div className="page"><div className="alert">{error} <a href="#/">Back to library</a></div></div>;
   if (!novel) return <div className="page loading">Loading…</div>;
 
@@ -114,7 +150,9 @@ export function Workspace({ novelId, mode }: { novelId: string; mode: Mode }) {
     activeThreadId,
     readChapter: (id) => { setReadChapterId(id); void doSave(); navigate(`/novel/${novelId}/read`); },
     readChapterId,
+    changes, reloadChanges, decideChanges, openChanges: () => setChangesOpen(true),
   };
+  const pendingCount = changes.filter((c) => c.status === 'pending').length;
 
   return (
     <Ctx.Provider value={state}>
@@ -152,6 +190,7 @@ export function Workspace({ novelId, mode }: { novelId: string; mode: Mode }) {
             </div>
             <div className="main-bar-info muted small">{novelWords(novel).toLocaleString()} words</div>
             <div className={`save-state ${save}`}>{save === 'saved' ? 'Saved' : save === 'saving' ? 'Saving…' : save === 'unsaved' ? 'Unsaved' : 'Save failed'}</div>
+            {pendingCount > 0 && <button className="btn small ai-changes" onClick={() => setChangesOpen(true)} title="Changes the AI proposed in chats, waiting for you">✦ {pendingCount} AI change{pendingCount === 1 ? '' : 's'}</button>}
             <button className="btn small" onClick={() => setHistoryOpen(true)}>⟲ History</button>
           </div>
           {error && <div className="alert" onClick={() => setError('')}>{error}</div>}
@@ -162,8 +201,9 @@ export function Workspace({ novelId, mode }: { novelId: string; mode: Mode }) {
             {mode === 'chat' && <ChatView />}
           </div>
         </section>
-        {codexId && <CodexEditor id={codexId} onClose={() => setCodexId(null)} />}
+        {codexId && <CodexEditor key={`${codexId}:${changes.filter((c) => c.status === 'accepted').length}`} id={codexId} onClose={() => setCodexId(null)} />}
         {historyOpen && <HistoryPanel onClose={() => setHistoryOpen(false)} />}
+        {changesOpen && <ChangesDrawer onClose={() => setChangesOpen(false)} />}
         {settingsOpen && <NovelSettings onClose={() => setSettingsOpen(false)} />}
       </div>
     </Ctx.Provider>

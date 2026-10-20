@@ -135,25 +135,62 @@ export function normalizeScene(scene) {
   return scene;
 }
 
-/** Extra system text that hands the AI the target scenes and the <revision> output format. */
-export function editingInstructions(novel, target) {
-  if (!target) return '';
-  const scenes = flatScenes(novel).filter((f) => (target.type === 'scene' ? f.scene.id === target.id : f.chapter.id === target.id));
-  if (!scenes.length) return '';
-  const body = scenes.map((f) => {
-    const title = `Chapter ${f.chapterNo} - ${f.scene.title || `Scene ${f.sceneNo}`}`;
-    return `<scene ref="${f.chapterNo}.${f.sceneNo}" title="${esc(title)}">\n${serializeScene(f.scene) || '(empty)'}\n</scene>`;
-  }).join('\n');
-  return `The author is working on the following part of the manuscript with you. This is its current text:
-<manuscriptForEditing>
-${body}
-</manuscriptForEditing>
+/**
+ * Extra system text for chats: the edit tags the AI may use (scene rewrites, new scenes and chapters, summaries,
+ * codex entries), a map of the book with scene refs, the codex entries not already shown in full, and the text of
+ * the part the author picked under "Working on" (a scene, a chapter or the whole novel).
+ */
+export function editingInstructions(novel, target, shownCodex = []) {
+  const flat = flatScenes(novel);
+  const editable = !target ? [] : flat.filter((f) => target.type === 'novel' || (target.type === 'scene' ? f.scene.id === target.id : f.chapter.id === target.id));
+  const ref = (f) => `${f.chapterNo}.${f.sceneNo}`;
 
-When the author asks you to change, fix, rewrite, expand or otherwise edit this text, write the COMPLETE new text of every scene you change inside <revision scene="REF">…</revision> tags, using the scene's ref. Inside a revision:
+  const map = [];
+  let chapter = null;
+  for (const f of flat) {
+    if (f.chapter !== chapter) {
+      if (chapter) map.push('  </chapter>');
+      map.push(`  <chapter number="${f.chapterNo}"${f.chapter.title ? ` title="${esc(f.chapter.title)}"` : ''}>`);
+      chapter = f.chapter;
+    }
+    const words = sceneText(f.scene).split(/\s+/).filter(Boolean).length;
+    const summary = (f.scene.summary || '').trim().replace(/\s+/g, ' ');
+    const short = summary.length > 160 ? `${summary.slice(0, 160)}…` : summary;
+    map.push(`    <scene ref="${ref(f)}" title="${esc(f.scene.title || `Scene ${f.sceneNo}`)}" words="${words}"${short ? '' : '/'}>${short ? `${short}</scene>` : ''}`);
+  }
+  if (chapter) map.push('  </chapter>');
+
+  const shown = new Set(shownCodex.map((n) => n.toLowerCase()));
+  const others = novel.codex.filter((e) => !shown.has(e.name.toLowerCase()));
+  const codexList = others.map((e) => `- ${e.name} (${e.type || 'other'}${e.aliases?.length ? `; aliases: ${e.aliases.join(', ')}` : ''})`).join('\n');
+
+  const body = editable.map((f) => {
+    const title = `Chapter ${f.chapterNo} - ${f.scene.title || `Scene ${f.sceneNo}`}`;
+    return `<scene ref="${ref(f)}" title="${esc(title)}">\n${serializeScene(f.scene) || '(empty)'}\n</scene>`;
+  }).join('\n');
+
+  return `You can change the author's story and codex directly. The author reviews every change and accepts or rejects it before anything is applied, so when they ask for a change, make it with the tags below instead of only describing it. Each tag holds the COMPLETE new content:
+- Rewrite an existing scene: <revision scene="REF">full new text of the scene</revision>. Only for scenes whose current text is in <manuscriptForEditing>.
+- Add a scene to a chapter: <newScene chapter="CHAPTER NUMBER" after="REF" title="Scene title" summary="Short summary">full text of the scene</newScene>. "after" is optional; without it the scene goes at the end of the chapter.
+- Add a chapter: <newChapter after="CHAPTER NUMBER" title="Chapter title" summary="Short summary">full text of its first scene</newChapter>. "after" is the number of the chapter it follows; without it the chapter goes at the end of the book.
+- Change a scene's summary: <sceneSummary scene="REF">new summary</sceneSummary>
+- Update or create a codex entry: <codexEntry name="Exact name" type="character|location|object|lore|subplot|other" aliases="comma, separated" tags="comma, separated">full description</codexEntry>. A name that matches an existing entry (or one of its aliases) updates it; any other name creates a new entry. Leave out attributes you don't want to change; add newName="..." to rename. If you have not seen an entry's full description, add mode="append" so your text is added to the end of it instead of replacing it.
+
+Inside scene text:
 - Keep story beats as their own lines starting with "${BEAT_PREFIX}" followed by the beat; the prose that belongs to that beat goes underneath. A line "### No beat" starts text that belongs to no beat. You may add, reword or remove beats when asked.
 - Write only the manuscript text: no commentary, no Markdown formatting other than the beat lines.
-Only include scenes you actually changed. Outside the tags, briefly explain what you changed and why.
-If the author only asks for feedback, questions or ideas, answer normally without revision tags.`;
+Only include what you actually change. Outside the tags, briefly explain what you changed and why. If the author only asks for feedback, questions or ideas, answer normally without tags.
+
+Scene refs are "chapter.scene" numbers. This is the book as it stands (scene summaries shortened):
+<storyMap>
+${map.join('\n')}
+</storyMap>
+${others.length ? `\nOther codex entries (their descriptions are not shown here):\n${codexList}\n` : ''}${body ? `
+The author is working on this part of the manuscript with you. This is its current text:
+<manuscriptForEditing>
+${body}
+</manuscriptForEditing>` : `
+No scene text was shared for editing (the author can pick a scene, chapter or the whole novel under "Working on"). You can still add scenes and chapters, change summaries and edit the codex.`}`;
 }
 
 // ---------- rendering ----------

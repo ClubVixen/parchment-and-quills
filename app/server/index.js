@@ -9,6 +9,7 @@ import { listVoices, synthesize } from './tts.js';
 import { aiSpeakers, getScript, saveScript } from './audio.js';
 import { effectiveInputs, normalizeInput } from './inputs.js';
 import { functionDocs } from './functions.js';
+import { changesFromReply } from './changes.js';
 
 const PORT = Number(process.env.NC_PORT || 8787);
 const HOST = process.env.NC_HOST || '127.0.0.1';
@@ -107,6 +108,15 @@ const findChapter = (novel, chId) => novel.acts.flatMap((a) => a.chapters).find(
 // ---------- chats ----------
 
 route('GET', '/api/novels/:id/chats', ({ id }) => store.getChats(id));
+route('GET', '/api/novels/:id/changes', ({ id }) => store.getChanges(id));
+route('PATCH', '/api/novels/:id/changes/:cid', ({ id, cid, body }) => {
+  const list = store.getChanges(id);
+  const c = list.find((x) => x.id === cid);
+  if (!c) throw Object.assign(new Error('Change not found'), { status: 404 });
+  if (['pending', 'accepted', 'rejected'].includes(body.status)) { c.status = body.status; c.decidedAt = new Date().toISOString(); }
+  store.saveChanges(id, list);
+  return c;
+});
 route('POST', '/api/novels/:id/chats', ({ id, body }) => {
   const chats = store.getChats(id);
   const ts = new Date().toISOString();
@@ -118,8 +128,16 @@ route('POST', '/api/novels/:id/chats', ({ id, body }) => {
 route('PATCH', '/api/novels/:id/chats/:tid', ({ id, tid, body }) =>
   store.updateThread(id, tid, (t) => { for (const k of ['title', 'promptId', 'inputs', 'context', 'pinned', 'target']) if (k in body) t[k] = body[k]; }));
 route('DELETE', '/api/novels/:id/chats/:tid', ({ id, tid }) => { store.saveChats(id, store.getChats(id).filter((t) => t.id !== tid)); return { ok: true }; });
-route('DELETE', '/api/novels/:id/chats/:tid/messages/:mid', ({ id, tid, mid }) =>
-  store.updateThread(id, tid, (t) => { t.messages = t.messages.filter((m) => m.id !== mid); }));
+/** Pending (undecided) changes proposed in these messages go away with them; decided ones stay as a record. */
+const dropPending = (novelId, messageIds) => {
+  const all = store.getChanges(novelId);
+  const keep = all.filter((c) => !(c.status === 'pending' && messageIds.includes(c.messageId)));
+  if (keep.length !== all.length) store.saveChanges(novelId, keep);
+};
+route('DELETE', '/api/novels/:id/chats/:tid/messages/:mid', ({ id, tid, mid }) => {
+  dropPending(id, [mid]);
+  return store.updateThread(id, tid, (t) => { t.messages = t.messages.filter((m) => m.id !== mid); });
+});
 
 // ---------- covers ----------
 
@@ -176,7 +194,7 @@ function prepare(body) {
   }
   const built = buildMessages({ novel, settings, prompt, prompts: allPrompts(), task, inputs: body.inputs || {}, context: body.context || [], model: body.model || settings.model });
   // Chat edit mode: give the AI the current text of the target scenes and the <revision> format.
-  const editing = task.kind === 'chat' ? editingInstructions(novel, body.target) : '';
+  const editing = task.kind === 'chat' ? editingInstructions(novel, body.target, built.codex) : '';
   // Summaries are always third person by design; everything else gets the book's POV spelled out.
   const pov = task.kind === 'summary' || task.kind === 'beatsFromText' ? '' : povInstruction(novel, task.sceneId || (body.target?.type === 'scene' ? body.target.id : null));
   const extraSystem = [pov, editing].filter(Boolean).join('\n\n');
@@ -208,7 +226,9 @@ async function generate(req, res, body) {
     });
   }
   if (thread && task.retry) {
-    store.updateThread(body.novelId, thread.id, (t) => { while (t.messages.length && t.messages.at(-1).role === 'assistant') t.messages.pop(); });
+    const dropped = [];
+    store.updateThread(body.novelId, thread.id, (t) => { while (t.messages.length && t.messages.at(-1).role === 'assistant') dropped.push(t.messages.pop().id); });
+    dropPending(body.novelId, dropped);
   }
   emit('meta', { codex, messageCount: messages.length, promptTokensApprox: Math.round(messages.reduce((n, m) => n + m.content.length, 0) / 4) });
   try {
@@ -217,6 +237,11 @@ async function generate(req, res, body) {
       store.updateThread(body.novelId, thread.id, (t) => {
         t.messages.push({ id: store.newId(), role: 'assistant', content: result.content, reasoning: result.reasoning, model: result.model, createdAt: ts() });
       });
+      // Edit tags in the reply become pending changes for the author to accept or reject.
+      const saved = store.getChats(body.novelId).find((t) => t.id === thread.id)?.messages.at(-1);
+      const changes = changesFromReply(store.getNovel(body.novelId), result.content, { threadId: thread.id, messageId: saved.id, newId: store.newId });
+      if (changes.length) store.saveChanges(body.novelId, [...store.getChanges(body.novelId), ...changes]);
+      result.changes = changes.length;
     }
     emit('done', result);
   } catch (err) {

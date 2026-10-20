@@ -151,9 +151,13 @@ export function serializeScene(s: Scene) {
   return out.join('\n\n');
 }
 
-/** Parse revised scene text back into blocks + beats. Beats whose text is unchanged keep their id and settings. */
+/**
+ * Parse revised scene text back into blocks + beats. The result has exactly the beats in the text, in order.
+ * A beat keeps its id and settings when its text is unchanged, or when it was reworded in the same position.
+ */
 export function parseSceneText(text: string, previousBeats: Beat[] = []): { blocks: TextBlock[]; beats: Beat[] } {
-  const beats: Beat[] = [...previousBeats];
+  const beats: Beat[] = [];
+  const unused = new Set(previousBeats);
   const blocks: TextBlock[] = [];
   let prose: string[] = [];
   let current: string | undefined;
@@ -164,8 +168,12 @@ export function parseSceneText(text: string, previousBeats: Beat[] = []): { bloc
     if (!m) { prose.push(line); continue; }
     flush();
     const beatText = m[1].trim();
-    let beat = beats.find((b) => b.text.trim().toLowerCase() === beatText.toLowerCase());
-    if (!beat) { beat = { id: newId(), text: beatText, words: '400' }; beats.push(beat); }
+    const same = [...unused].find((b) => b.text.trim().toLowerCase() === beatText.toLowerCase());
+    const samePlace = previousBeats[beats.length];
+    const prev = same || (samePlace && unused.has(samePlace) ? samePlace : undefined);
+    if (prev) unused.delete(prev);
+    const beat: Beat = prev ? { ...prev, text: beatText } : { id: newId(), text: beatText, words: '400' };
+    beats.push(beat);
     current = beat.id;
   }
   flush();
@@ -174,20 +182,32 @@ export function parseSceneText(text: string, previousBeats: Beat[] = []): { bloc
   return { blocks: scene.blocks as TextBlock[], beats };
 }
 
-export type ReplyPart = { kind: 'text'; text: string } | { kind: 'revision'; ref: string; text: string; complete: boolean };
+export const EDIT_TAGS = ['revision', 'newScene', 'newChapter', 'sceneSummary', 'codexEntry'] as const;
+export type EditTag = (typeof EDIT_TAGS)[number];
+export type ReplyPart =
+  | { kind: 'text'; text: string }
+  | { kind: 'edit'; tag: EditTag; attrs: Record<string, string>; text: string; complete: boolean; index: number };
 
-/** Split an AI reply into prose and <revision scene="REF"> blocks (the last one may still be streaming). */
+const unescAttr = (s: string) => s.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+/**
+ * Split an AI reply into prose and edit tags (<revision>, <newScene>, <newChapter>, <sceneSummary>, <codexEntry>);
+ * the last tag may still be streaming. `index` counts complete tags in order, matching the server's change records.
+ */
 export function parseReply(content: string): ReplyPart[] {
   const parts: ReplyPart[] = [];
-  const re = /<revision\s+scene="([^"]+)"\s*>([\s\S]*?)(<\/revision>|$)/g;
-  let last = 0;
+  const re = new RegExp(`<(${EDIT_TAGS.join('|')})\\b([^>]*)>([\\s\\S]*?)(<\\/\\1>|$)`, 'g');
+  let last = 0, index = 0;
   for (const m of content.matchAll(re)) {
     if (m.index! > last) parts.push({ kind: 'text', text: content.slice(last, m.index) });
-    parts.push({ kind: 'revision', ref: m[1].trim(), text: m[2].trim(), complete: m[3] === '</revision>' });
+    const attrs: Record<string, string> = {};
+    for (const a of m[2].matchAll(/([A-Za-z]+)\s*=\s*"([^"]*)"/g)) attrs[a[1]] = unescAttr(a[2]);
+    const complete = !!m[4];
+    parts.push({ kind: 'edit', tag: m[1] as EditTag, attrs, text: m[3].replace(/^\s*\n/, '').replace(/\s+$/, ''), complete, index: complete ? index++ : -1 });
     last = m.index! + m[0].length;
   }
   if (last < content.length) parts.push({ kind: 'text', text: content.slice(last) });
-  return parts.filter((p) => p.kind === 'revision' || p.text.trim());
+  return parts.filter((p) => p.kind === 'edit' || p.text.trim());
 }
 
 const plain = (s: string) => s.replace(/\*\*|__|\*|_|`/g, '').trim();

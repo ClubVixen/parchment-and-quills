@@ -219,3 +219,9 @@ export function updateThread(id, threadId, fn) {
   saveChats(id, chats);
   return t;
 }
+
+// ---------- AI-proposed changes (changes.json) ----------
+
+const changesFile = (id) => path.join(novelDir(id), 'changes.json');
+export const getChanges = (id) => readJson(changesFile(id), []);
+export const saveChanges = (id, list) => writeJson(changesFile(id), list);

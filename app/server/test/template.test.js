@@ -72,8 +72,45 @@ test('chat edit mode hands over target scenes with beat headings and refs', asyn
   const text = editingInstructions(n, { type: 'chapter', id: 'c' });
   assert.match(text, /<scene ref="1\.1" title="Chapter 1 - Scene 1">\n### Beat: Mara reaches the door\n\nOne two three\./);
   assert.match(text, /<revision scene="REF">/);
-  assert.equal(editingInstructions(n, null), '');
-  assert.equal(editingInstructions(n, { type: 'scene', id: 'missing' }), '');
+  // Without a target the AI still gets the edit tags and the story map, but no scene text to rewrite.
+  const bare = editingInstructions(n, null);
+  assert.match(bare, /<newChapter after=/);
+  assert.match(bare, /<storyMap>\n  <chapter number="1">\n    <scene ref="1\.1" title="Scene 1" words="\d+"\/>/);
+  assert.doesNotMatch(bare, /<manuscriptForEditing>\n/);
+  assert.doesNotMatch(editingInstructions(n, { type: 'scene', id: 'missing' }), /<manuscriptForEditing>\n/);
+  assert.match(editingInstructions(n, { type: 'novel', id: '' }), /<manuscriptForEditing>\n<scene ref="1\.1"/);
+  // Entries already shown in full are not listed again.
+  assert.match(bare, /Other codex entries[\s\S]*- Mara \(character; aliases: Mar\)/);
+  assert.doesNotMatch(editingInstructions(n, null, ['Mara']), /- Mara \(/);
+});
+
+test('edit tags in a reply become pending changes', async () => {
+  const { changesFromReply } = await import('../changes.js');
+  let k = 0;
+  const reply = `Here you go.
+<revision scene="1.1">
+### Beat: Mara arrives
+One two three. Mara ran to the door. Four five six.
+</revision>
+<sceneSummary scene="1.1">Mara runs to the door.</sceneSummary>
+<newScene chapter="1" after="1.1" title="After">She opened it.</newScene>
+<newChapter after="1" title="Two" summary="Mara leaves.">The road was long.</newChapter>
+<codexEntry name="mar" aliases="Mar, Keeper" mode="append">She hates the cold.</codexEntry>
+<codexEntry name="Tobin" type="Character">Old keeper.</codexEntry>
+<revision scene="9.9">nowhere</revision>`;
+  const list = changesFromReply(novel, reply, { threadId: 't', messageId: 'm', newId: () => `c${++k}` });
+  assert.deepEqual(list.map((c) => c.kind), ['revision', 'sceneSummary', 'newScene', 'newChapter', 'codexEntry', 'codexEntry']);
+  const [rev, sum, scene, chapter, upd, add] = list;
+  assert.equal(rev.sceneId, 's');
+  assert.match(rev.base, /One two three\. Mara walked/);
+  assert.equal(sum.text, 'Mara runs to the door.');
+  assert.deepEqual([scene.chapterId, scene.afterSceneId, scene.title], ['c', 's', 'After']);
+  assert.deepEqual([chapter.afterChapterId, chapter.title, chapter.summary, chapter.text], ['c', 'Two', 'Mara leaves.', 'The road was long.']);
+  assert.equal(upd.entryId, 'm');
+  assert.deepEqual(upd.codex.aliases, ['Mar', 'Keeper']);
+  assert.equal(upd.codex.description, 'Keeper of the lighthouse.\n\nShe hates the cold.');
+  assert.deepEqual([add.entryId, add.codex.name, add.codex.type], [null, 'Tobin', 'character']);
+  assert.ok(list.every((c) => c.status === 'pending' && c.messageId === 'm'));
 });
 
 test('rewrite under a story beat sends the beat; POV rule follows the novel setting', async () => {

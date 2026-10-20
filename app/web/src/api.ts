@@ -1,4 +1,4 @@
-import type { AudioScript, FunctionDoc, GenerateRequest, HistoryEntry, Novel, NovelSummary, Prompt, PromptMessage, Settings, Thread } from './types';
+import type { AudioScript, Change, FunctionDoc, GenerateRequest, HistoryEntry, Novel, NovelSummary, Prompt, PromptMessage, Settings, Thread } from './types';
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -37,6 +37,8 @@ export const api = {
   updateThread: (id: string, tid: string, patch: Partial<Thread>) => call<Thread>('PATCH', `/novels/${id}/chats/${tid}`, patch),
   deleteThread: (id: string, tid: string) => call('DELETE', `/novels/${id}/chats/${tid}`),
   deleteMessage: (id: string, tid: string, mid: string) => call<Thread>('DELETE', `/novels/${id}/chats/${tid}/messages/${mid}`),
+  changes: (id: string) => call<Change[]>('GET', `/novels/${id}/changes`),
+  setChangeStatus: (id: string, cid: string, status: Change['status']) => call<Change>('PATCH', `/novels/${id}/changes/${cid}`, { status }),
 
   setCover: (id: string, dataUrl: string) => call<{ cover: number }>('PUT', `/novels/${id}/cover`, { dataUrl }),
   removeCover: (id: string) => call<{ cover: null }>('DELETE', `/novels/${id}/cover`),

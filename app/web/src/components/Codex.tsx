@@ -3,13 +3,16 @@ import { useWorkspace } from '../views/Workspace';
 import { CODEX_TYPES, type CodexEntry, type CodexType } from '../types';
 import { entryRegex, flatScenes, mentionCount, newId, sceneLabel, sceneText } from '../util';
 import { TagInput } from './TagInput';
+import { ChangeCard } from './Changes';
 
 const TYPE_LABEL: Record<CodexType, string> = { character: 'Characters', location: 'Locations', object: 'Objects', lore: 'Lore', subplot: 'Subplots', other: 'Other' };
 const TYPE_ICON: Record<CodexType, string> = { character: '👤', location: '📍', object: '🗝', lore: '📜', subplot: '🧵', other: '◆' };
 
 export function CodexPanel() {
-  const { novel, update, openCodex } = useWorkspace();
+  const { novel, update, openCodex, changes } = useWorkspace();
   const [q, setQ] = useState('');
+  const aiPending = changes.filter((c) => c.status === 'pending' && c.kind === 'codexEntry');
+  const proposedNew = aiPending.filter((c) => !c.entryId);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const match = (e: CodexEntry) => !q || [e.name, ...e.aliases, ...e.tags, e.description].join(' ').toLowerCase().includes(q.toLowerCase());
 
@@ -26,6 +29,12 @@ export function CodexPanel() {
         <button className="btn small" onClick={() => add()}>+ New Entry</button>
       </div>
       <div className="list">
+        {!!proposedNew.length && (
+          <div className="group">
+            <div className="group-head"><span>✦ Proposed by the AI</span><span className="muted tiny">{proposedNew.length} new</span></div>
+            <div className="codex-proposals">{proposedNew.map((c) => <ChangeCard key={c.id} change={c} open={false} inBook />)}</div>
+          </div>
+        )}
         {!novel.codex.length && (
           <div className="empty small">
             <b>Your codex is empty.</b>
@@ -45,7 +54,7 @@ export function CodexPanel() {
                 <div key={e.id} className="codex-item" onClick={() => openCodex(e.id)}>
                   <div className="avatar">{TYPE_ICON[e.type]}</div>
                   <div className="codex-item-body">
-                    <div className="codex-name">{e.name || <i className="muted">Unnamed</i>} {e.alwaysInclude && <span className="chip tiny" title="Always sent to the AI">always</span>}</div>
+                    <div className="codex-name">{e.name || <i className="muted">Unnamed</i>} {e.alwaysInclude && <span className="chip tiny" title="Always sent to the AI">always</span>}{aiPending.some((c) => c.entryId === e.id) && <span className="chip tiny ai-chip" title="The AI proposed a change to this entry; open it to review">✦ AI edit</span>}</div>
                     {!!e.tags.length && <div className="chips">{e.tags.map((t) => <span key={t} className="chip">{t}</span>)}</div>}
                     <div className="muted small clamp2">{e.description}</div>
                   </div>
@@ -62,8 +71,9 @@ export function CodexPanel() {
 const splitList = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
 
 export function CodexEditor({ id, onClose }: { id: string; onClose: () => void }) {
-  const { novel, update, focusScene } = useWorkspace();
+  const { novel, update, focusScene, changes } = useWorkspace();
   const entry = novel.codex.find((e) => e.id === id);
+  const proposals = changes.filter((c) => c.status === 'pending' && c.kind === 'codexEntry' && c.entryId === id);
   const [tab, setTab] = useState<'details' | 'research' | 'mentions'>('details');
   const [aliasText, setAliasText] = useState(entry?.aliases.join(', ') || '');
   const count = useMemo(() => (entry ? mentionCount(entry, novel) : 0), [entry, novel]);
@@ -90,6 +100,7 @@ export function CodexEditor({ id, onClose }: { id: string; onClose: () => void }
           <button className={tab === 'mentions' ? 'tab active' : 'tab'} onClick={() => setTab('mentions')}>Mentions</button>
         </div>
         <div className="modal-body form">
+          {proposals.map((c) => <ChangeCard key={c.id} change={c} inBook />)}
           {tab === 'details' && (
             <>
               <label>Aliases / Nicknames <span className="muted small">(comma separated; all names are detected in your prose and chats)</span>

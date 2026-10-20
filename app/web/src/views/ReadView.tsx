@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useWorkspace } from './Workspace';
-import { beatColor, chapterNumber, chapterWords, paragraphs, textBlocks } from '../util';
+import type { Change } from '../types';
+import { ChangeButtons, newChaptersAfter, newScenesAfter, ProseDiff, sceneChanges } from '../components/Changes';
+import { changeLabel } from '../changes';
+import { beatColor, chapterNumber, chapterWords, paragraphs, textBlocks, serializeScene } from '../util';
 import { AudioPlayer } from '../components/Audio';
 
 export const READ_FONTS = [
@@ -32,7 +35,9 @@ function loadFmt(): Fmt {
 
 /** Distraction-free reading of the manuscript, one chapter or the whole book, with read-aloud. */
 export function ReadView() {
-  const { novel, readChapterId, focusScene } = useWorkspace();
+  const { novel, readChapterId, focusScene, changes } = useWorkspace();
+  const [showAi, setShowAi] = useState(true);
+  const chapterIds = novel.acts.flatMap((a) => a.chapters.map((c) => c.id));
   const chapters = novel.acts.flatMap((a, ai) => a.chapters.map((c) => ({ c, ai })));
   const [chapterId, setChapterId] = useState<string>(readChapterId || chapters[0]?.c.id || '');
   const [fmt, setFmt] = useState<Fmt>(loadFmt);
@@ -73,6 +78,7 @@ export function ReadView() {
         <div className="grow" />
         {chapterId !== 'all' && !listening && <button className="btn small" onClick={() => setListening(true)}>🔊 Listen</button>}
         <div className="menu-wrap" ref={menuRef}>
+          {changes.some((x) => x.status === 'pending' && x.kind !== 'codexEntry') && <button className={`btn small ${showAi ? 'on' : ''}`} onClick={() => setShowAi(!showAi)} title="Show the changes the AI proposed, highlighted">✦ {showAi ? 'Hide' : 'Show'} AI changes</button>}
           <button className={`btn small ${menu ? 'on' : ''}`} onClick={() => setMenu(!menu)}>Aa Format</button>
           {menu && (
             <div className="menu format-menu">
@@ -116,6 +122,15 @@ export function ReadView() {
               {c.scenes.map((s, si) => {
                 const blocks = textBlocks(s);
                 const empty = !blocks.some((b) => b.text.trim());
+                const rewrite = showAi ? sceneChanges(changes, s.id).find((x) => x.kind === 'revision') : undefined;
+                const inserts = showAi ? newScenesAfter(changes, c, s.id) : [];
+                if (rewrite) return (
+                  <div key={s.id} className="read-scene">
+                    {si > 0 && <div className="scene-divider">* * *</div>}
+                    <ReadProposal change={rewrite} before={serializeScene(s)} />
+                    {inserts.map((x) => <div key={x.id}><div className="scene-divider">* * *</div><ReadProposal change={x} /></div>)}
+                  </div>
+                );
                 return (
                   <div key={s.id} className="read-scene">
                     {si > 0 && <div className="scene-divider">* * *</div>}
@@ -138,9 +153,16 @@ export function ReadView() {
                       );
                     })}
                     <button className="btn ghost tiny read-edit" onClick={() => focusScene(s.id)}>✎ Edit scene</button>
+                    {inserts.map((x) => <div key={x.id}><div className="scene-divider">* * *</div><ReadProposal change={x} /></div>)}
                   </div>
                 );
               })}
+              {showAi && newChaptersAfter(changes, c.id, chapterIds).map((x) => (
+                <div key={x.id} className="read-proposed-chapter">
+                  <h1>{x.title || 'New chapter'}</h1>
+                  <ReadProposal change={x} />
+                </div>
+              ))}
             </section>
           );
         })}
@@ -161,6 +183,17 @@ function Choice({ label, value, options, onChange }: { label: string; value: str
       <div className="segmented small">
         {Object.entries(options).map(([k, v]) => <button key={k} className={value === k ? 'active' : ''} onClick={() => onChange(k)}>{v}</button>)}
       </div>
+    </div>
+  );
+}
+
+/** A proposed rewrite, new scene or new chapter, highlighted in the reading layout with Accept / Reject. */
+function ReadProposal({ change, before = '' }: { change: Change; before?: string }) {
+  const { novel } = useWorkspace();
+  return (
+    <div className="read-proposal">
+      <div className="read-proposal-bar"><span className="ai-chip chip tiny">✦ AI</span> <span className="grow">{changeLabel(novel, change)}</span><ChangeButtons list={[change]} /></div>
+      <ProseDiff before={before} after={change.text || ''} className="read-diff" />
     </div>
   );
 }

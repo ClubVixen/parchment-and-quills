@@ -33,7 +33,7 @@ export function ChatView() {
 }
 
 function ThreadView({ thread }: { thread: Thread }) {
-  const { novel, reloadThreads, saveNow, openThread } = useWorkspace();
+  const { novel, reloadThreads, saveNow, openThread, reloadChanges } = useWorkspace();
   const { prompts } = useApp();
   const chatPrompts = prompts.filter((p) => p.kind === 'chat');
   const [local, setLocal] = useState<Thread>(thread);
@@ -71,6 +71,7 @@ function ThreadView({ thread }: { thread: Thread }) {
     if (!retry) { setPending(message); setDraft(''); }
     await gen.run(request(retry ? { retry: true } : { message }));
     const fresh = await reloadThreads();
+    await reloadChanges();
     const t = fresh.find((x) => x.id === thread.id);
     if (t) setLocal(t);
     setPending(null);
@@ -110,11 +111,11 @@ function ThreadView({ thread }: { thread: Thread }) {
         {!visible.length && !pending && (
           <div className="empty">
             Start by typing a message below. Any codex entries you mention will be included in the context.
-            <br /><br />To have the AI change your story, pick a chapter or scene under <b>Working on</b>, then ask for example “tighten the dialogue in this scene” or “rewrite it from Tobin's point of view”. You'll get the new text with the changes marked, and can commit it to the manuscript.
+            <br /><br />The AI can change your story: rewrite scenes, add scenes and chapters, update summaries and edit or create codex entries. To let it rewrite existing text, pick a scene, chapter or the whole novel under <b>Working on</b>, then ask for example “tighten the dialogue in this scene” or “add a chapter where Tobin finds the letter”. Every change waits for you: accept or reject it here, in the chapter itself or in the codex.
           </div>
         )}
         {visible.map((m) => (
-          <MessageView key={m.id} m={m} onDelete={async () => { const t = await api.deleteMessage(novel.id, thread.id, m.id); setLocal(t); reloadThreads(); }}
+          <MessageView key={m.id} m={m} onDelete={async () => { const t = await api.deleteMessage(novel.id, thread.id, m.id); setLocal(t); reloadThreads(); reloadChanges(); }}
             onRetry={m.id === lastAssistant?.id && !gen.busy ? () => send(true) : undefined} />
         ))}
         {pendingShown && <div className="msg user"><div className="msg-row"><div className="bubble">{pending}</div><Avatar size={28} /></div></div>}
@@ -160,7 +161,7 @@ function MessageView({ m, onDelete, onRetry }: { m: ChatMessage; onDelete: () =>
       {m.role === 'assistant' ? (
         <div className="bubble">
           <Reasoning text={m.reasoning || ''} />
-          <AssistantContent content={m.content} />
+          <AssistantContent content={m.content} messageId={m.id} />
         </div>
       ) : (
         <div className="msg-row"><div className="bubble pre-wrap">{m.content}</div><Avatar size={28} /></div>
@@ -181,13 +182,14 @@ function TargetPicker({ value, onChange }: { value: EditTarget; onChange: (t: Ed
   const chapters = novel.acts.flatMap((a) => a.chapters);
   const v = value ? `${value.type}:${value.id}` : '';
   return (
-    <label className="target-picker" title="Give the AI this text and let it propose revisions you can commit">
+    <label className="target-picker" title="The text the AI may rewrite. It can always add scenes and chapters, change summaries and edit the codex">
       <span className="muted small">Working on</span>
       <select className="input inline" value={v} onChange={(e) => {
         const [type, id] = e.target.value.split(':');
-        onChange(e.target.value ? { type: type as 'scene' | 'chapter', id } : null);
+        onChange(e.target.value ? { type: type as 'scene' | 'chapter' | 'novel', id: id || '' } : null);
       }}>
-        <option value="">Nothing (just talk)</option>
+        <option value="">No text (new chapters, summaries & codex only)</option>
+        <option value="novel:">Whole novel</option>
         <optgroup label="Chapters">
           {chapters.map((c) => <option key={c.id} value={`chapter:${c.id}`}>Chapter {chapterNumber(novel, c.id)}{c.title ? `: ${c.title}` : ''}</option>)}
         </optgroup>
