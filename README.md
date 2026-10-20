@@ -3,7 +3,8 @@
 A local, self-hosted novel-writing app in the style of NovelCrafter. It works with your own
 OpenAI-compatible AI server (vLLM, LM Studio, Ollama, …) and keeps every book on your own computer.
 It includes a codex, story beats, version history, an AI workshop chat that can revise scenes,
-a FimFiction-style reader and read-aloud with a voice per character.
+a reader mode inspired by the one found on FimFiction, and a read-aloud with a voice per character. 
+This takes two great services and tailors those experiences into a more specific experience.
 
 Full documentation is in [app/README.md](app/README.md).
 
@@ -30,7 +31,7 @@ Your novels, each with its own cover.
 ![Library](docs/screenshots/library.png)
 
 ### Plan
-Acts, chapters and scene cards, each with a summary, beats and codex mentions. The codex sidebar is on the left.
+Acts, chapters, and scene cards, each with a summary, beats, and codex mentions. The codex sidebar is on the left.
 
 ![Plan view](docs/screenshots/plan.png)
 
@@ -40,7 +41,7 @@ The manuscript editor. Each beat's section has a coloured edge. The side panel l
 ![Write view](docs/screenshots/write.png)
 
 ### Rewrite a passage or assign it to a beat
-Highlight text to **Expand**, **Rephrase** or **Shorten** it, with an optional guide for the AI. You can also attach the highlighted text to a beat.
+Highlight text to **Expand**, **Rephrase**, or **Shorten** it, with an optional guide for the AI. You can also attach the highlighted text to a beat.
 
 ![Selection toolbar](docs/screenshots/rewrite.png)
 
@@ -50,7 +51,7 @@ Choose a chapter or scene under **Working on** and ask for changes. The AI repli
 ![AI chat with a revision](docs/screenshots/chat.png)
 
 ### Read
-A FimFiction-style reader (Open Sans, double spaced). **🔊 Listen** reads the chapter aloud.
+A FimFiction-style reader (Open Sans, double-spaced). **🔊 Listen** reads the chapter aloud.
 
 ![Read view](docs/screenshots/read.png)
 
