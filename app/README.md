@@ -1,7 +1,6 @@
 # Parchment & Quills
 
 A local writing app in the style of NovelCrafter that talks to your own OpenAI-compatible AI server
-(currently vLLM serving GLM-5.3-Flash at `http://192.168.0.48:8000/v1`).
 
 ## Start
 
