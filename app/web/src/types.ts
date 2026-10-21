@@ -148,7 +148,7 @@ export type Change = {
   threadId: string;
   messageId: string;
   index: number;
-  kind: 'revision' | 'newScene' | 'newChapter' | 'sceneSummary' | 'codexEntry';
+  kind: 'revision' | 'passage' | 'newScene' | 'newChapter' | 'sceneSummary' | 'codexEntry';
   status: 'pending' | 'accepted' | 'rejected';
   createdAt: string;
   decidedAt?: string;
@@ -163,6 +163,12 @@ export type Change = {
   base?: string | CodexFields | null;
   entryId?: string | null;
   codex?: CodexFields;
+  /** Passage edits: the exact text in block `blockId` to replace, and what replaces it. */
+  blockId?: string;
+  find?: string;
+  replace?: string;
+  mode?: 'replace' | 'after' | 'before';
+  note?: string;
 };
 
 export type HistoryEntry = { file: string; savedAt: string; label: string; auto: boolean; words: number };

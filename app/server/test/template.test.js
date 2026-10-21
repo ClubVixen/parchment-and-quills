@@ -215,3 +215,19 @@ test('developmental editor uses the picked genre and feedback', () => {
   assert.match(set, /Craft speech patterns/);
   assert.match(set, /<fantasy>[\s\S]*fantasy jargon[\s\S]*<\/fantasy>/);
 });
+
+test('passage edits find quoted text (even with straight vs curly quotes) and insert after a paragraph', async () => {
+  const { changesFromReply } = await import('../changes.js');
+  const n = structuredClone(novel);
+  n.acts[0].chapters[0].scenes[0].blocks[0].text = 'First paragraph here.\n\nMara’s door creaked — open. She waited.\n\nLast one.';
+  let k = 0;
+  const reply = `<passage scene="1.1"><find>Mara's door creaked -- open.</find><replace>Mara's door groaned open.</replace></passage>
+<passage scene="1.1"><find>First paragraph</find><insert>A new paragraph.</insert></passage>
+<passage scene="1.1" position="before"><find>Last one.</find><insert>Second to last.</insert></passage>
+<passage scene="1.1"><find>Not in the book</find><replace>x</replace></passage>`;
+  const list = changesFromReply(n, reply, { threadId: 't', messageId: 'm', newId: () => `p${++k}` });
+  assert.equal(list.length, 3);
+  assert.deepEqual([list[0].find, list[0].replace, list[0].sceneId, list[0].blockId], ['Mara’s door creaked — open.', 'Mara’s door groaned open.', 's', 'b']);
+  assert.deepEqual([list[1].find, list[1].replace], ['First paragraph here.', 'First paragraph here.\n\nA new paragraph.']);
+  assert.deepEqual([list[2].find, list[2].replace], ['Last one.', 'Second to last.\n\nLast one.']);
+});

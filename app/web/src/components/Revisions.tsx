@@ -10,6 +10,7 @@ const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
 
 const DRAFT_LABEL: Record<EditTag, (a: Record<string, string>) => string> = {
   revision: (a) => `Rewriting scene ${a.scene || ''}`,
+  passage: (a) => `Edit in scene ${a.scene || ''}`,
   newScene: (a) => `New scene${a.title ? ` “${a.title}”` : ''} in chapter ${a.chapter || ''}`,
   newChapter: (a) => `New chapter${a.title ? ` “${a.title}”` : ''}`,
   sceneSummary: (a) => `New summary for scene ${a.scene || ''}`,
@@ -42,6 +43,8 @@ export function AssistantContent({ content, streaming = false, messageId }: { co
         );
         return <div key={i} className="revision missing">{DRAFT_LABEL[p.tag](p.attrs)}: nothing to change (it matches the book already, or points at a scene or chapter that doesn't exist).</div>;
       })}
+      {/* Changes recorded for this reply without a matching tag (e.g. converted from older replies). */}
+      {!streaming && mine.filter((c) => !edits.some((p) => p.index === c.index)).map((c) => <ChangeCard key={c.id} change={c} />)}
       {!streaming && mine.filter((c) => c.status === 'pending').length > 1 && (
         <div className="row"><span className="muted small grow">All changes in this reply:</span><ChangeButtons list={mine} /></div>
       )}

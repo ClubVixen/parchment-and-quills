@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../App';
 import { useWorkspace } from './Workspace';
 import type { Beat, Prompt, Scene, TextBlock } from '../types';
-import { beatColor, blankScene, chapterNumber, flatScenes, mentions, mergeBlocks, newId, sceneWords, textBlocks } from '../util';
+import { beatColor, blankScene, chapterNumber, flatScenes, mentions, mergeBlocks, newId, sceneWords, serializeScene, textBlocks } from '../util';
 import { AutoTextarea } from '../components/AutoTextarea';
 import { SceneCodexChips, SceneMenu, useSceneOps, useSummarizer } from '../components/SceneTools';
 import { BeatsFromTextDialog } from '../components/BeatsFromText';
-import { ChangeCard, newChaptersAfter, newScenesAfter, PendingInsert, sceneChanges } from '../components/Changes';
+import { ChangeButtons, ChangeCard, newChaptersAfter, newScenesAfter, PendingInsert, ProseDiff, sceneChanges } from '../components/Changes';
+import { sceneWithChanges } from '../changes';
 import { ContextPicker, defaultInputs, GenerateDialog, ModelSelect, promptInputs, Reasoning, useGeneration, type DialogResult, type Inputs } from '../components/Generate';
 
 type Caret = { blockId: string; pos: number } | null;
@@ -153,7 +154,10 @@ function SceneEditor({ scene, number, chapterNo }: { scene: Scene; number: numbe
   const { changes } = useWorkspace();
   const proposals = sceneChanges(changes, scene.id);
   const rewrite = proposals.find((c) => c.kind === 'revision');
+  const passages = proposals.filter((c) => c.kind === 'passage');
   const [showRewrite, setShowRewrite] = useState(true);
+  const passageKey = passages.map((c) => c.id).join();
+  const preview = useMemo(() => (passages.length ? serializeScene(sceneWithChanges(scene, passages)) : ''), [scene, passageKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const jump = (beatId: string) => {
     const first = blocks.find((b) => b.beatId === beatId);
@@ -186,7 +190,19 @@ function SceneEditor({ scene, number, chapterNo }: { scene: Scene; number: numbe
             <button className="btn ghost tiny" onClick={() => setShowRewrite(!showRewrite)}>{showRewrite ? 'Edit current text instead' : 'Show proposed changes'}</button>
           </div>
         )}
-        {rewrite && showRewrite ? <ChangeCard change={rewrite} inBook /> : blocks.map((b, i) => {
+        {!rewrite && !!passages.length && (
+          <>
+            <div className="scene-proposal-bar">
+              <span className="grow">✦ The AI proposed {passages.length === 1 ? 'an edit' : `${passages.length} edits`} to this scene.{showRewrite ? ' Highlighted below.' : ''}</span>
+              {passages.length > 1 && <ChangeButtons list={passages} />}
+              <button className="btn ghost tiny" onClick={() => setShowRewrite(!showRewrite)}>{showRewrite ? 'Edit current text instead' : 'Show proposed changes'}</button>
+            </div>
+            {showRewrite && passages.map((c) => <ChangeCard key={c.id} change={c} open={false} inBook />)}
+          </>
+        )}
+        {rewrite && showRewrite ? <ChangeCard change={rewrite} inBook />
+          : !rewrite && passages.length && showRewrite ? <ProseDiff before={serializeScene(scene)} after={preview} />
+          : blocks.map((b, i) => {
           const sectionStart = !!b.beatId && blocks[i - 1]?.beatId !== b.beatId;
           const beatNo = beats.findIndex((x) => x.id === b.beatId) + 1;
           return (

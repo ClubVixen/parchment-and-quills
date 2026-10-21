@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useWorkspace } from './Workspace';
 import type { Change } from '../types';
 import { ChangeButtons, newChaptersAfter, newScenesAfter, ProseDiff, sceneChanges } from '../components/Changes';
-import { changeLabel } from '../changes';
+import { changeLabel, sceneWithChanges } from '../changes';
 import { beatColor, chapterNumber, chapterWords, paragraphs, textBlocks, serializeScene } from '../util';
 import { AudioPlayer } from '../components/Audio';
 
@@ -123,7 +123,19 @@ export function ReadView() {
                 const blocks = textBlocks(s);
                 const empty = !blocks.some((b) => b.text.trim());
                 const rewrite = showAi ? sceneChanges(changes, s.id).find((x) => x.kind === 'revision') : undefined;
+                const passages = showAi && !rewrite ? sceneChanges(changes, s.id).filter((x) => x.kind === 'passage') : [];
                 const inserts = showAi ? newScenesAfter(changes, c, s.id) : [];
+                if (passages.length) return (
+                  <div key={s.id} className="read-scene">
+                    {si > 0 && <div className="scene-divider">* * *</div>}
+                    <div className="read-proposal">
+                      <div className="read-proposal-bar"><span className="ai-chip chip tiny">✦ AI</span> <span className="grow">{passages.length === 1 ? 'One proposed edit' : `${passages.length} proposed edits`} in this scene</span><ChangeButtons list={passages} /></div>
+                      {passages.length > 1 && <ul className="read-proposal-list">{passages.map((x) => <li key={x.id}><span className="grow">{changeLabel(novel, x)}</span><ChangeButtons list={[x]} /></li>)}</ul>}
+                      <ProseDiff before={serializeScene(s)} after={serializeScene(sceneWithChanges(s, passages))} className="read-diff" />
+                    </div>
+                    {inserts.map((x) => <div key={x.id}><div className="scene-divider">* * *</div><ReadProposal change={x} /></div>)}
+                  </div>
+                );
                 if (rewrite) return (
                   <div key={s.id} className="read-scene">
                     {si > 0 && <div className="scene-divider">* * *</div>}

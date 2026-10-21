@@ -2,8 +2,9 @@
 // or rejects in the manuscript, the codex or the chat. Scene and chapter references are resolved to ids when the
 // change is created, so they stay correct if the book is reorganised before the author gets to them.
 import { flatScenes, serializeScene } from './context.js';
+import { locate, paragraphRange } from './locate.js';
 
-export const EDIT_TAGS = ['revision', 'newScene', 'newChapter', 'sceneSummary', 'codexEntry'];
+export const EDIT_TAGS = ['revision', 'passage', 'newScene', 'newChapter', 'sceneSummary', 'codexEntry'];
 const TAG_RE = new RegExp(`<(${EDIT_TAGS.join('|')})\\b([^>]*)>([\\s\\S]*?)<\\/\\1>`, 'g');
 const unesc = (s) => s.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 const list = (s) => (s == null ? undefined : s.split(',').map((x) => x.trim()).filter(Boolean));
@@ -20,6 +21,33 @@ export function parseEdits(content) {
   }
   return out;
 }
+
+/**
+ * Resolve a passage edit: find the quoted text (in the given scene first, then anywhere in the book) and return
+ * what to replace. Insertions become a replacement of the whole paragraph around the quote, so accepting adds
+ * the new paragraph(s) right after (or before) it. Returns null when the quote isn't in the manuscript.
+ */
+export function resolvePassage(novel, { ref, find, text: raw, mode = 'replace' }) {
+  const flat = flatScenes(novel);
+  // New text follows the manuscript's apostrophe style (the AI tends to write ' where the book has ’).
+  const text = (s) => (/’/.test(s) && !/’/.test(raw) ? raw.replace(/(\w)'(\w)/g, '$1’$2') : raw);
+  const first = flat.find((f) => `${f.chapterNo}.${f.sceneNo}` === String(ref || '').trim());
+  for (const f of [first, ...flat.filter((x) => x !== first)].filter(Boolean)) {
+    for (const b of f.scene.blocks.filter((x) => x.type === 'text')) {
+      const r = locate(b.text, find);
+      if (!r) continue;
+      const t = text(b.text);
+      if (mode === 'replace') return { sceneId: f.scene.id, blockId: b.id, find: b.text.slice(r[0], r[1]), replace: t, mode };
+      const [ps, pe] = paragraphRange(b.text, r[0], r[1]);
+      const para = b.text.slice(ps, pe);
+      return { sceneId: f.scene.id, blockId: b.id, find: para, replace: mode === 'before' ? `${t}\n\n${para}` : `${para}\n\n${t}`, mode };
+    }
+  }
+  return null;
+}
+
+const FIND_RE = /<find>([\s\S]*?)<\/find>/;
+const NEW_TEXT_RE = /<(replace|insert)>([\s\S]*?)<\/(?:replace|insert)>/;
 
 /** Turn a reply's edit tags into change records. Edits that point nowhere or change nothing are dropped. */
 export function changesFromReply(novel, content, { threadId, messageId, newId }) {
@@ -38,6 +66,14 @@ export function changesFromReply(novel, content, { threadId, messageId, newId })
       const f = byRef(attrs.scene);
       if (!f || norm(serializeScene(f.scene)) === norm(body)) return;
       out.push({ ...base, sceneId: f.scene.id, base: serializeScene(f.scene), text: body });
+    } else if (tag === 'passage') {
+      const find = FIND_RE.exec(body)?.[1]?.trim();
+      const m = NEW_TEXT_RE.exec(body);
+      if (!find || !m) return;
+      const mode = m[1] === 'insert' ? (attrs.position === 'before' ? 'before' : 'after') : 'replace';
+      const p = resolvePassage(novel, { ref: attrs.scene, find, text: m[2].replace(/^\s*\n/, '').replace(/\s+$/, ''), mode });
+      if (!p || norm(p.find) === norm(p.replace)) return;
+      out.push({ ...base, ...p, note: attrs.note || '' });
     } else if (tag === 'newScene') {
       const after = byRef(attrs.after);
       const chapter = chapterByNo(attrs.chapter) || after?.chapter;

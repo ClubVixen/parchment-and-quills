@@ -170,7 +170,11 @@ export function editingInstructions(novel, target, shownCodex = []) {
   }).join('\n');
 
   return `You can change the author's story and codex directly. The author reviews every change and accepts or rejects it before anything is applied, so when they ask for a change, make it with the tags below instead of only describing it. Each tag holds the COMPLETE new content:
-- Rewrite an existing scene: <revision scene="REF">full new text of the scene</revision>. Only for scenes whose current text is in <manuscriptForEditing>.
+- Change or add specific passages in an existing scene (preferred for targeted edits, one tag per edit, as many tags as needed):
+  <passage scene="REF"><find>exact current text</find><replace>new text</replace></passage> replaces the found text.
+  <passage scene="REF"><find>exact current text</find><insert>new paragraph(s)</insert></passage> adds new paragraphs right after the paragraph containing the found text (add position="before" to put them before it).
+  The <find> text must be copied exactly from the manuscript as you have seen it (a sentence or two is enough, but it must be unique in the scene). Only use text you have actually seen in this conversation.
+- Rewrite a whole scene: <revision scene="REF">full new text of the scene</revision>. Only for scenes whose current text is in <manuscriptForEditing>, and only when most of the scene changes; for a few sentences use <passage>.
 - Add a scene to a chapter: <newScene chapter="CHAPTER NUMBER" after="REF" title="Scene title" summary="Short summary">full text of the scene</newScene>. "after" is optional; without it the scene goes at the end of the chapter.
 - Add a chapter: <newChapter after="CHAPTER NUMBER" title="Chapter title" summary="Short summary">full text of its first scene</newChapter>. "after" is the number of the chapter it follows; without it the chapter goes at the end of the book.
 - Change a scene's summary: <sceneSummary scene="REF">new summary</sceneSummary>
@@ -178,7 +182,7 @@ export function editingInstructions(novel, target, shownCodex = []) {
 
 Inside scene text:
 - Keep story beats as their own lines starting with "${BEAT_PREFIX}" followed by the beat; the prose that belongs to that beat goes underneath. A line "### No beat" starts text that belongs to no beat. You may add, reword or remove beats when asked.
-- Write only the manuscript text: no commentary, no Markdown formatting other than the beat lines.
+- Write only the manuscript text: no commentary, no Markdown formatting other than the beat lines. Separate paragraphs with a blank line.
 Only include what you actually change. Outside the tags, briefly explain what you changed and why. If the author only asks for feedback, questions or ideas, answer normally without tags.
 
 Scene refs are "chapter.scene" numbers. This is the book as it stands (scene summaries shortened):
@@ -190,7 +194,7 @@ The author is working on this part of the manuscript with you. This is its curre
 <manuscriptForEditing>
 ${body}
 </manuscriptForEditing>` : `
-No scene text was shared for editing (the author can pick a scene, chapter or the whole novel under "Working on"). You can still add scenes and chapters, change summaries and edit the codex.`}`;
+No scene text was shared for editing (the author can pick a scene, chapter or the whole novel under "Working on"). You can still edit passages you have seen in this conversation with <passage>, add scenes and chapters, change summaries and edit the codex. To rewrite text you have not seen, ask the author to pick it under "Working on".`}`;
 }
 
 // ---------- rendering ----------

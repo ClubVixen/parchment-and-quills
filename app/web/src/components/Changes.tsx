@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useWorkspace } from '../views/Workspace';
 import type { Change, CodexFields, Scene } from '../types';
-import { changeLabel, changeScene } from '../changes';
+import { changeLabel, changeScene, passageContext } from '../changes';
 import { findScene, serializeScene } from '../util';
 import { diffWords } from './History';
 
@@ -93,6 +93,11 @@ export function ChangePreview({ change }: { change: Change }) {
   const scene = change.sceneId ? findScene(novel, change.sceneId) : undefined;
   switch (change.kind) {
     case 'revision': return <ProseDiff before={scene ? serializeScene(scene) : String(change.base || '')} after={change.text || ''} />;
+    case 'passage': {
+      const ctx = scene && passageContext(scene, change);
+      if (!ctx) return <div className="alert small">The text this edit changes is no longer in the scene (it was edited since), so it can't be applied. Reject it, or ask the AI again.</div>;
+      return <>{change.note && <p className="muted small">{change.note}</p>}<ProseDiff before={ctx.before} after={ctx.after} /></>;
+    }
     case 'sceneSummary': return <ProseDiff before={scene?.summary || ''} after={change.text || ''} className="prose-diff small" />;
     case 'codexEntry': {
       const e = change.entryId ? novel.codex.find((x) => x.id === change.entryId) : undefined;
@@ -151,7 +156,7 @@ export function ChangeCard({ change, open: startOpen = true, inBook = false }: {
 
 /** Pending changes that rewrite this scene or its summary. */
 export const sceneChanges = (changes: Change[], sceneId: string) =>
-  changes.filter((c) => c.status === 'pending' && c.sceneId === sceneId && (c.kind === 'revision' || c.kind === 'sceneSummary'));
+  changes.filter((c) => c.status === 'pending' && c.sceneId === sceneId && (c.kind === 'revision' || c.kind === 'sceneSummary' || c.kind === 'passage'));
 /** Pending new scenes that go right after this scene (or at the end of the chapter when `sceneId` is its last). */
 export function newScenesAfter(changes: Change[], chapter: { id: string; scenes: Scene[] }, sceneId: string) {
   const last = chapter.scenes.at(-1)?.id === sceneId;

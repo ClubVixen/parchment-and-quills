@@ -541,3 +541,5 @@ textarea.input.summary, textarea.input.beat-text { resize: none; }
 .read-proposal-bar { display: flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 13px; color: #4a2fa0; margin-bottom: 8px; }
 .read-diff p { text-indent: inherit; }
 .read-proposed-chapter h1 { color: #5b3fb0; }
+.read-proposal-list { list-style: none; margin: 0 0 10px; padding: 0; font-family: var(--sans); font-size: 13px; }
+.read-proposal-list li { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--line); }

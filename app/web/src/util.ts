@@ -182,7 +182,7 @@ export function parseSceneText(text: string, previousBeats: Beat[] = []): { bloc
   return { blocks: scene.blocks as TextBlock[], beats };
 }
 
-export const EDIT_TAGS = ['revision', 'newScene', 'newChapter', 'sceneSummary', 'codexEntry'] as const;
+export const EDIT_TAGS = ['revision', 'passage', 'newScene', 'newChapter', 'sceneSummary', 'codexEntry'] as const;
 export type EditTag = (typeof EDIT_TAGS)[number];
 export type ReplyPart =
   | { kind: 'text'; text: string }
